@@ -29,6 +29,56 @@ const mapeamentoSetores = {
     'AT': 'Autorização'
 };
 
+// 🌟 FUNÇÃO DE RESET COMPLETO (USADA NO BOTÃO E NO TIMER DA MEIA-NOITE)
+function realizarResetGeral() {
+    clearTimeout(timerSegurancaTV);
+    filaPacientes = []; filaDeEsperaTV = []; tvFalando = false; 
+    contadores = { 'RP': 1, 'R': 1, 'CP': 1, 'C': 1, 'AT': 1 };
+    turnos = { 'REGULACAO': 'P', 'COMPLEXIDADE': 'P' };
+    ultimosChamados = {
+        'Regulação': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
+        'Complexidade': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
+        'Autorização': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ]
+    };
+    io.emit('atualizar_fila', filaPacientes);
+    io.emit('atualizar_painel_setores', ultimosChamados);
+    enviarQuantitativosFila();
+    io.emit('liberar_botoes_tv_livre');
+    io.emit('limpar_tv'); 
+    io.emit('sistema_resetado');
+    console.log("⏰ Sistema resetado automaticamente!");
+}
+
+// 🌟 TIMER AUTOMÁTICO PARA A MEIA-NOITE
+function agendarResetMeiaNoite() {
+    const agora = new Date();
+    const meiaNoite = new Date();
+    
+    meiaNoite.setHours(24, 0, 0, 0); // Define para a próxima meia-noite
+    
+    const tempoAteMeiaNoite = meiaNoite.getTime() - agora.getTime();
+    
+    setTimeout(() => {
+        realizarResetGeral();
+        // Depois do primeiro reset, agenda para rodar a cada 24 horas
+        setInterval(realizarResetGeral, 24 * 60 * 60 * 1000);
+    }, tempoAteMeiaNoite);
+}
+agendarResetMeiaNoite(); // Ativa o agendamento ao ligar o servidor
+
+// 🌟 SISTEMA ANTI-COCHILO (PING AUTOMÁTICO A CADA 10 MINUTOS)
+// Substitua o link abaixo pelo link VERDE real que o Render te deu!
+const URL_DO_SEU_SISTEMA = "https://painel-da-regulacao.onrender.com"; 
+
+setInterval(() => {
+    http.get(URL_DO_SEU_SISTEMA, (res) => {
+        console.log("🔄 Ping enviado para manter o servidor acordado.");
+    }).on('error', (err) => {
+        console.log("❌ Erro no ping anti-cochilo:", err.message);
+    });
+}, 10 * 60 * 1000); // 10 minutos em milissegundos
+
+
 function enviarQuantitativosFila() {
     const quantitativos = {
         'REGULACAO': filaPacientes.filter(p => p.setor === 'Regulação' && p.status === 'LOBBY').length,
@@ -46,7 +96,7 @@ function enfileirarChamadaTV(pacoteDeChamada) {
     }
 }
 
-function executarDisparoTV(pacoteDeChamada) {
+function ejecutarDisparoTV(pacoteDeChamada) {
     tvFalando = true;
     io.emit('bloqueio_tv_ocupada', pacoteDeChamada);
     io.emit('tocar_chamada_tv', { ficha: pacoteDeChamada.ficha });
@@ -67,7 +117,6 @@ function liberarServidorEProximo() {
     }
 }
 
-// MOTOR DE INTERCALAÇÃO RIGOROSO
 function extrairFichaComRegra(setorNome, prefixoPadrao) {
     const turnoAtual = turnos[setorNome];
     const siglaAlvo = (turnoAtual === 'P') ? `${prefixoPadrao}P` : prefixoPadrao;
@@ -155,9 +204,7 @@ io.on('connection', (socket) => {
     socket.on('registrar_conclusao_atendimento', (dados) => {
         const { setor, resultado, siglaFicha } = dados;
 
-        // 🌟 CORREÇÃO DO "FALTOU"
         if (resultado === 'falta' && setor !== 'AUTORIZACAO') {
-            // Se o paciente faltou, o turno é estornado para o tipo dele
             const isPriority = siglaFicha.endsWith('P');
             turnos[setor] = isPriority ? 'P' : 'N';
         }
@@ -177,21 +224,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('resetar_sistema', () => {
-        clearTimeout(timerSegurancaTV);
-        filaPacientes = []; filaDeEsperaTV = []; tvFalando = false; 
-        contadores = { 'RP': 1, 'R': 1, 'CP': 1, 'C': 1, 'AT': 1 };
-        turnos = { 'REGULACAO': 'P', 'COMPLEXIDADE': 'P' };
-        ultimosChamados = {
-            'Regulação': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
-            'Complexidade': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
-            'Autorização': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ]
-        };
-        io.emit('atualizar_fila', filaPacientes);
-        io.emit('atualizar_painel_setores', ultimosChamados);
-        enviarQuantitativosFila();
-        io.emit('liberar_botoes_tv_livre');
-        io.emit('limpar_tv'); 
-        io.emit('sistema_resetado');
+        realizarResetGeral();
     });
 });
 
