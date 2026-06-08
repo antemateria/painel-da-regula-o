@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel do Operador - Regulação</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+        
+        html, body { 
+            font-family: 'Inter', sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; color: #1f2937; 
+            height: 100vh; max-height: 100vh; overflow: hidden; display: flex; flex-direction: column; 
+        }
+        
+        .header-guiche { 
+            height: 65px; background: #111827; color: white; padding: 0 30px; display: flex; 
+            justify-content: space-between; align-items: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); 
+            box-sizing: border-box; flex-shrink: 0;
+        }
+        .info-operador { font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+        .badge-setor { background: #3b82f6; padding: 5px 12px; border-radius: 6px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .btn-sair { background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .btn-sair:hover { background: #dc2626; }
+
+        .conteudo-principal { flex: 1; display: flex; padding: 20px; gap: 20px; box-sizing: border-box; overflow: hidden; }
+        .area-atendimento { flex: 6; display: flex; flex-direction: column; gap: 15px; height: 100%; }
+        
+        .aviso-tv { padding: 12px 20px; border-radius: 10px; font-size: 16px; font-weight: 600; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); flex-shrink: 0; height: 48px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+        .aviso-tv.livre { background: #d1fae5; color: #065f46; border: 1px solid #34d399; }
+        .aviso-tv.ocupada { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; animation: pulseAviso 2s infinite; }
+        @keyframes pulseAviso { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
+
+        .botoes-chamar { flex-shrink: 0; }
+        .btn-chamar-fila { 
+            width: 100%; height: 80px; border: none; border-radius: 16px; color: white; font-size: 22px; 
+            font-weight: 900; cursor: pointer; transition: transform 0.1s; box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.2); 
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
+        }
+        .btn-chamar-fila:active:not(:disabled) { transform: scale(0.99); }
+        .btn-chamar-fila:disabled { background: #e5e7eb !important; color: #9ca3af !important; box-shadow: none !important; cursor: not-allowed !important; border: 1px solid #d1d5db !important; }
+
+        .card-atendimento { background: white; flex: 1; border-radius: 16px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); border: 2px solid #e5e7eb; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; box-sizing: border-box; overflow: hidden; }
+        .card-vazio { color: #9ca3af; font-size: 24px; font-weight: 700; }
+        .em-atendimento { display: none; width: 100%; flex-direction: column; align-items: center; }
+        .label-atendimento { font-size: 16px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; }
+        .senha-gigante { font-size: 100px; font-weight: 900; color: #111827; line-height: 1; margin: 0 0 25px 0; }
+        
+        .acoes-paciente { display: flex; gap: 15px; width: 100%; max-width: 550px; }
+        .btn-acao { flex: 1; height: 60px; border: none; border-radius: 12px; font-size: 16px; font-weight: 800; cursor: pointer; transition: 0.2s; }
+        
+        .btn-acao:disabled { background: #e5e7eb !important; color: #9ca3af !important; box-shadow: none !important; cursor: not-allowed !important; }
+        
+        .btn-rechamar { background: #f3f4f6; color: #374151; border: 2px solid #d1d5db; }
+        .btn-rechamar:hover:not(:disabled) { background: #e5e7eb; }
+        
+        .btn-ausente { background: #ef4444; color: white; }
+        .btn-ausente:hover:not(:disabled) { background: #dc2626; }
+        
+        .btn-atendido { background: #10b981; color: white; }
+        .btn-atendido:hover:not(:disabled) { background: #059669; }
+
+        .area-preview { flex: 3; background: white; border-radius: 16px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); border: 1px solid #e5e7eb; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
+        .header-preview { background: #f9fafb; padding: 18px; border-bottom: 1px solid #e5e7eb; font-size: 16px; font-weight: 800; color: #374151; text-align: center; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 10px; user-select: none; }
+        .setinha { font-size: 12px; transition: transform 0.3s; }
+        .lista-preview { padding: 15px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; }
+        .lista-preview.fechado { max-height: 0px !important; padding: 0px !important; overflow: hidden; }
+
+        .item-preview { background: #f3f4f6; padding: 15px; border-radius: 10px; border-left: 6px solid #3b82f6; text-align: center; flex-shrink: 0; }
+        .prev-rp { border-left-color: #f59e0b; }
+        .prev-r { border-left-color: #3b82f6; }
+        .prev-senha { font-size: 22px; font-weight: 900; color: #111827; letter-spacing: 1px; }
+
+        .rodape-metricas { height: 55px; background: #1f2937; color: white; padding: 0 30px; display: flex; justify-content: space-around; align-items: center; font-size: 15px; font-weight: 600; box-sizing: border-box; flex-shrink: 0; }
+        .metrica { display: flex; align-items: center; gap: 8px; }
+        .metrica-valor { font-size: 20px; font-weight: 900; color: #38bdf8; }
+        .metrica-atendidos { color: #34d399; }
+        .metrica-espera { color: #fbbf24; }
+    </style>
+</head>
+<body>
+
+    <div class="header-guiche">
+        <div class="info-operador">
+            Mesa: <span id="nome-operador">---</span>
+            <span class="badge-setor" style="margin-left: 10px;">Regulação</span>
+        </div>
+        <button class="btn-sair" onclick="sairDoSistema()">SAIR</button>
+    </div>
+
+    <div class="conteudo-principal">
+        <div class="area-atendimento">
+            <div id="aviso-tv" class="aviso-tv livre"><b>TV Livre</b> - Pronto para chamar</div>
+
+            <div class="botoes-chamar">
+                <button class="btn-chamar-fila" id="btn-chamar-smart" onclick="chamarProximoSmart()">
+                    CHAMAR PRÓXIMO PACIENTE
+                </button>
+            </div>
+
+            <div class="card-atendimento">
+                <div class="card-vazio" id="status-livre">Guichê Livre.<br><span style="font-size: 15px; font-weight: 400; opacity: 0.7;">Clique em chamar próximo acima.</span></div>
+                
+                <div class="em-atendimento" id="status-atendimento">
+                    <div class="label-atendimento">Ficha em Atendimento</div>
+                    <div class="senha-gigante" id="senha-atual">---</div>
+                    
+                    <div class="acoes-paciente">
+                        <button class="btn-acao btn-rechamar" onclick="rechamarPaciente()" id="btn-rechamar">🔊 Rechamar</button>
+                        <button class="btn-acao btn-ausente" onclick="finalizarAtendimento('falta')" id="btn-ausente">❌ Faltou</button>
+                        <button class="btn-acao btn-atendido" onclick="finalizarAtendimento('atendido')" id="btn-atendido">✅ Atendido</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="area-preview">
+            <div class="header-preview" onclick="alternarAbasFila()">
+                <span>Próximas Fichas (Setor)</span>
+                <span class="setinha" id="icone-setinha">▼</span>
+            </div>
+            <div class="lista-preview" id="lista-preview"></div>
+        </div>
+    </div>
+
+    <div class="rodape-metricas">
+        <div class="metrica">Aguardando: <span class="metrica-valor" id="metric-aguardando">0 pacientes</span></div>
+        <div class="metrica">Atendidos: <span class="metrica-valor metrica-atendidos" id="metric-atendidos">0</span></div>
+        <div class="metrica">Tempo médio de espera: <span class="metrica-valor metrica-espera" id="metric-tempo">0 min</span></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const MEU_SETOR = 'REGULACAO';
+
+        const operadorLogado = localStorage.getItem('operadorAtual') || 'Desconhecido';
+        document.getElementById('nome-operador').innerText = operadorLogado;
+
+        let pacienteEmAtendimento = null;
+        let atendidosHoje = 0;
+        let tempoTotalEsperaMinutos = 0;
+        
+        let tvOcupadaGlobal = false;
+        let rechamadasUsadas = 0;
+        let emCooldown = false;
+        let timerCooldown;
+
+        function formatarTempo(minutosTotais) {
+            if (minutosTotais < 60) {
+                return `${minutosTotais} min`;
+            }
+            const horas = Math.floor(minutosTotais / 60);
+            const minutos = minutosTotais % 60;
+            if (minutos === 0) {
+                return `${horas}h`;
+            }
+            return `${horas}h ${minutos}min`;
+        }
+
+        function sairDoSistema() {
+            if (pacienteEmAtendimento) {
+                alert("Você precisa CONCLUIR o atendimento atual antes de sair.");
+                return;
+            }
+            localStorage.removeItem('operadorAtual');
+            localStorage.removeItem('setorAtual');
+            window.location.href = 'index.html';
+        }
+
+        function alternarAbasFila() {
+            const lista = document.getElementById('lista-preview');
+            const setinha = document.getElementById('icone-setinha');
+            if (lista.classList.contains('fechado')) {
+                lista.classList.remove('fechado');
+                setinha.style.transform = 'rotate(0deg)';
+            } else {
+                lista.classList.add('fechado');
+                setinha.style.transform = 'rotate(-180deg)';
+            }
+        }
+
+        socket.on('bloqueio_tv_ocupada', (dados) => {
+            tvOcupadaGlobal = true;
+            const aviso = document.getElementById('aviso-tv');
+            aviso.className = 'aviso-tv ocupada';
+            
+            let setorChamando = "Sistema";
+            if (dados && dados.ficha) {
+                const prefixo = dados.ficha.split(' ')[0];
+                if (prefixo === 'RP' || prefixo === 'R') setorChamando = 'Regulação';
+                else if (prefixo === 'CP' || prefixo === 'C') setorChamando = 'Complexidade';
+                else if (prefixo === 'AT') setorChamando = 'Autorização';
+            }
+            
+            aviso.innerHTML = `<b>TV Ocupada</b> - ${setorChamando} chamando paciente`;
+            
+            // 🌟 AQUI ESTÁ A CORREÇÃO DA MESA INDEPENDENTE:
+            // A TV ocupada SÓ bloqueia a capacidade de chamar/rechamar (o uso do alto-falante)
+            document.getElementById('btn-chamar-smart').disabled = true;
+            document.getElementById('btn-rechamar').disabled = true;
+            
+            // Os botões 'Faltou' e 'Atendido' NUNCA são bloqueados se o operador já tiver uma ficha com ele
+        });
+
+        socket.on('liberar_botoes_tv_livre', () => {
+            tvOcupadaGlobal = false;
+            const aviso = document.getElementById('aviso-tv');
+            aviso.className = 'aviso-tv livre';
+            aviso.innerHTML = `<b>TV Livre</b> - Pronto para chamar`;
+            
+            if (!pacienteEmAtendimento) {
+                document.getElementById('btn-chamar-smart').disabled = false;
+            }
+            if (pacienteEmAtendimento) {
+                if (!emCooldown && rechamadasUsadas < 3) {
+                    document.getElementById('btn-rechamar').disabled = false;
+                }
+            }
+        });
+
+        socket.on('atualizar_contagem_paineis', (quantitativos) => {
+            document.getElementById('metric-aguardando').innerText = `${quantitativos[MEU_SETOR]} pacientes`;
+        });
+
+        socket.on('atualizar_fila', (filaGlobal) => {
+            const filaFiltrada = filaGlobal.filter(p => p.fila === 'RP' || p.fila === 'R');
+            const previewContainer = document.getElementById('lista-preview');
+            previewContainer.innerHTML = '';
+            
+            if (!pacienteEmAtendimento && !tvOcupadaGlobal) {
+                document.getElementById('btn-chamar-smart').disabled = (filaFiltrada.length === 0);
+            }
+
+            if (filaFiltrada.length === 0) {
+                previewContainer.innerHTML = '<div style="text-align:center; padding: 30px; color: #9ca3af; font-weight: 600;">Nenhum paciente aguardando regulação.</div>';
+            } else {
+                filaFiltrada.forEach(p => {
+                    const classeBorda = p.fila === 'RP' ? 'prev-rp' : 'prev-r';
+                    previewContainer.innerHTML += `
+                        <div class="item-preview ${classeBorda}">
+                            <span class="prev-senha">${p.ficha}</span>
+                        </div>
+                    `;
+                });
+            }
+        });
+
+        function chamarProximoSmart() {
+            if (pacienteEmAtendimento || tvOcupadaGlobal) return;
+            socket.emit('chamar_para_atendimento', MEU_SETOR);
+        }
+
+        socket.on('paciente_enviado_para_mesa', (dados) => {
+            pacienteEmAtendimento = dados.paciente;
+            rechamadasUsadas = 0;
+            emCooldown = false;
+            clearInterval(timerCooldown);
+
+            document.getElementById('btn-chamar-smart').disabled = true; 
+            document.getElementById('status-livre').style.display = 'none';
+            document.getElementById('status-atendimento').style.display = 'flex';
+            document.getElementById('senha-atual').innerText = dados.paciente.ficha;
+
+            document.getElementById('btn-rechamar').innerHTML = '🔊 Rechamar';
+
+            // Como a ficha chegou na mesa dele, libera o poder de decisão (Atendido/Faltou) independentemente da TV
+            document.getElementById('btn-ausente').disabled = false;
+            document.getElementById('btn-atendido').disabled = false;
+
+            if (!tvOcupadaGlobal) {
+                document.getElementById('btn-rechamar').disabled = false;
+            }
+        });
+
+        socket.on('erro_sem_paciente_na_sala', (msg) => alert(msg));
+
+        function rechamarPaciente() {
+            if (pacienteEmAtendimento && !emCooldown && !tvOcupadaGlobal) {
+                if (rechamadasUsadas === 0) {
+                    socket.emit('rechamar_paciente_tv', pacienteEmAtendimento);
+                    rechamadasUsadas = 1;
+                    document.getElementById('btn-rechamar').innerHTML = '🔊 Rechamar (Aviso)';
+                } else if (rechamadasUsadas === 1) {
+                    socket.emit('rechamar_paciente_tv', pacienteEmAtendimento);
+                    rechamadasUsadas = 2;
+                    iniciarCooldown();
+                } else if (rechamadasUsadas === 2) {
+                    socket.emit('rechamar_paciente_tv', pacienteEmAtendimento);
+                    rechamadasUsadas = 3;
+                    const btn = document.getElementById('btn-rechamar');
+                    btn.innerHTML = 'Limite Atingido';
+                    btn.disabled = true;
+                }
+            }
+        }
+
+        function iniciarCooldown() {
+            emCooldown = true;
+            let segundosRestantes = 60;
+            const btn = document.getElementById('btn-rechamar');
+            btn.disabled = true;
+            btn.innerHTML = `Aguarde ${segundosRestantes}s...`;
+
+            timerCooldown = setInterval(() => {
+                segundosRestantes--;
+                btn.innerHTML = `Aguarde ${segundosRestantes}s...`;
+                if (segundosRestantes <= 0) {
+                    clearInterval(timerCooldown);
+                    emCooldown = false;
+                    if (!tvOcupadaGlobal) btn.disabled = false;
+                    btn.innerHTML = '🔊 Última Chamada';
+                }
+            }, 1000);
+        }
+
+        function finalizarAtendimento(status) {
+            // 🌟 AQUI: Removi a trava !tvOcupadaGlobal. 
+            // O operador é dono da ficha dele e finaliza a hora que precisar!
+            if (pacienteEmAtendimento) {
+                if (status === 'atendido') {
+                    atendidosHoje++;
+                    document.getElementById('metric-atendidos').innerText = atendidosHoje;
+                    
+                    const minutosEsperando = Math.max(0, Math.floor((Date.now() - Number(pacienteEmAtendimento.id)) / 60000));
+                    tempoTotalEsperaMinutos += minutosEsperando;
+                    const tempoMedio = Math.round(tempoTotalEsperaMinutos / atendidosHoje);
+                    
+                    document.getElementById('metric-tempo').innerText = formatarTempo(tempoMedio);
+                }
+
+                socket.emit('registrar_conclusao_atendimento', {
+                    setor: MEU_SETOR,
+                    resultado: status,
+                    siglaFicha: pacienteEmAtendimento.fila
+                });
+            }
+        }
+
+        socket.on('guiche_liberado_com_sucesso', () => {
+            pacienteEmAtendimento = null;
+            document.getElementById('status-livre').style.display = 'block';
+            document.getElementById('status-atendimento').style.display = 'none';
+            clearInterval(timerCooldown);
+            
+            if (!tvOcupadaGlobal) {
+                document.getElementById('btn-chamar-smart').disabled = false;
+            }
+        });
+
+        socket.on('sistema_resetado', () => {
+            pacienteEmAtendimento = null;
+            document.getElementById('status-livre').style.display = 'block';
+            document.getElementById('status-atendimento').style.display = 'none';
+            clearInterval(timerCooldown);
+            
+            atendidosHoje = 0;
+            tempoTotalEsperaMinutos = 0;
+            document.getElementById('metric-aguardando').innerText = "0 pacientes";
+            document.getElementById('metric-atendidos').innerText = "0";
+            document.getElementById('metric-tempo').innerText = "0 min";
+        });
+    </script>
+</body>
+</html>

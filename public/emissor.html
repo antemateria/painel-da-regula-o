@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Painel da Recepção - Emissor</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f3f4f6; 
+            margin: 0; 
+            padding: 0 0 40px 0; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            min-height: 100vh; 
+            user-select: none; 
+            -webkit-user-select: none; 
+        }
+
+        /* Cabeçalho na cor escura igual ao da Porta */
+        .cabecalho {
+            background-color: #1f2937;
+            color: white;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 30px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            margin-bottom: 25px;
+            box-sizing: border-box;
+        }
+
+        .cabecalho-textos h1 { margin: 0; font-size: 22px; font-weight: 900; text-transform: uppercase; }
+        .cabecalho-textos p { margin: 5px 0 0 0; font-size: 14px; font-weight: 600; color: #9ca3af; }
+
+        .btn-sair {
+            background: #ef4444; color: white; border: none; padding: 10px 25px; 
+            border-radius: 6px; font-weight: 700; cursor: pointer; transition: 0.2s; font-size: 14px;
+        }
+        .btn-sair:hover { background: #dc2626; }
+
+        .container-botoes { width: 100%; max-width: 650px; padding: 0 15px; display: flex; flex-direction: column; gap: 20px; box-sizing: border-box; }
+        
+        .bloco-setor { background: white; padding: 20px 15px; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 2px solid #e5e7eb; }
+
+        /* Título do setor e Total Aguardando */
+        .titulo-setor {
+            font-size: 20px; font-weight: 900; color: #374151; text-transform: uppercase; text-align: center; margin: 0 0 15px 0; border-bottom: 2px solid #f3f4f6; padding-bottom: 10px;
+        }
+        .total-aguardando {
+            display: block; font-size: 14px; color: #ef4444; font-weight: 800; margin-top: 5px; text-transform: none;
+        }
+
+        .grid-responsivo { display: grid; grid-template-columns: 1fr; gap: 15px; }
+        @media (min-width: 600px) { .grid-responsivo { grid-template-columns: 1fr 1fr; } }
+
+        .box-botao { display: flex; flex-direction: column; gap: 8px; }
+
+        .btn-totem {
+            padding: 20px 15px; border: none; border-radius: 12px; font-size: 28px; font-weight: 900; color: white; cursor: pointer; text-transform: uppercase; transition: transform 0.1s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; line-height: 1.2; width: 100%; box-sizing: border-box;
+        }
+        .btn-totem:active { transform: scale(0.96); }
+        .btn-totem span { font-size: 14px; font-weight: 600; opacity: 0.9; text-align: center; letter-spacing: 0.5px; }
+
+        /* Cores solicitadas */
+        .btn-prioridade { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-bottom: 5px solid #991b1b; } /* Vermelho */
+        .btn-normal { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-bottom: 5px solid #1d4ed8; } /* Azul */
+        .btn-unica { background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-bottom: 5px solid #047857; } /* Verde */
+
+        /* Rastreador de informações */
+        .info-fila {
+            background-color: #f9fafb; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; font-size: 13px; font-weight: 600; color: #4b5563; display: flex; flex-direction: column; gap: 5px;
+        }
+        .linha-info { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #e5e7eb; padding-bottom: 3px; }
+        .linha-info:last-child { border-bottom: none; padding-bottom: 0; }
+        
+        .valor-destaque { font-weight: 900; font-size: 14px; color: #111827; }
+        .valor-proxima { color: #2563eb; } /* Destaque para a próxima */
+        .valor-tv { color: #d97706; } /* Destaque para a TV */
+    </style>
+</head>
+<body>
+
+    <div class="cabecalho">
+        <div class="cabecalho-textos">
+            <h1>Emissor de Fichas</h1>
+            <p>Recepção</p>
+        </div>
+        <button class="btn-sair" onclick="window.location.href='index.html'">SAIR</button>
+    </div>
+
+    <div class="container-botoes">
+        
+        <div class="bloco-setor">
+            <h2 class="titulo-setor">Regulação <span class="total-aguardando">Total Aguardando: <span id="total-REG">0</span></span></h2>
+            <div class="grid-responsivo">
+                <div class="box-botao">
+                    <button class="btn-totem btn-prioridade" onclick="emitirSenha('RP')">
+                        RP <span>Prioridade</span>
+                    </button>
+                    <div class="info-fila">
+                        <div class="linha-info">Última Emitida: <span class="valor-destaque" id="ult-emit-RP">--</span></div>
+                        <div class="linha-info">Próxima será: <span class="valor-destaque valor-proxima" id="prox-emit-RP">RP 01</span></div>
+                        <div class="linha-info">Última na TV: <span class="valor-destaque valor-tv" id="ult-tv-RP">--</span></div>
+                    </div>
+                </div>
+                <div class="box-botao">
+                    <button class="btn-totem btn-normal" onclick="emitirSenha('R')">
+                        R <span>Normal</span>
+                    </button>
+                    <div class="info-fila">
+                        <div class="linha-info">Última Emitida: <span class="valor-destaque" id="ult-emit-R">--</span></div>
+                        <div class="linha-info">Próxima será: <span class="valor-destaque valor-proxima" id="prox-emit-R">R 01</span></div>
+                        <div class="linha-info">Última na TV: <span class="valor-destaque valor-tv" id="ult-tv-R">--</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bloco-setor">
+            <h2 class="titulo-setor">Complexidade <span class="total-aguardando">Total Aguardando: <span id="total-COMP">0</span></span></h2>
+            <div class="grid-responsivo">
+                <div class="box-botao">
+                    <button class="btn-totem btn-prioridade" onclick="emitirSenha('CP')">
+                        CP <span>Prioridade</span>
+                    </button>
+                    <div class="info-fila">
+                        <div class="linha-info">Última Emitida: <span class="valor-destaque" id="ult-emit-CP">--</span></div>
+                        <div class="linha-info">Próxima será: <span class="valor-destaque valor-proxima" id="prox-emit-CP">CP 01</span></div>
+                        <div class="linha-info">Última na TV: <span class="valor-destaque valor-tv" id="ult-tv-CP">--</span></div>
+                    </div>
+                </div>
+                <div class="box-botao">
+                    <button class="btn-totem btn-normal" onclick="emitirSenha('C')">
+                        C <span>Normal</span>
+                    </button>
+                    <div class="info-fila">
+                        <div class="linha-info">Última Emitida: <span class="valor-destaque" id="ult-emit-C">--</span></div>
+                        <div class="linha-info">Próxima será: <span class="valor-destaque valor-proxima" id="prox-emit-C">C 01</span></div>
+                        <div class="linha-info">Última na TV: <span class="valor-destaque valor-tv" id="ult-tv-C">--</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="bloco-setor">
+            <h2 class="titulo-setor">Autorização <span class="total-aguardando">Total Aguardando: <span id="total-AUT">0</span></span></h2>
+            <div class="box-botao">
+                <button class="btn-totem btn-unica" onclick="emitirSenha('AT')">
+                    AT <span>Fila Única</span>
+                </button>
+                <div class="info-fila">
+                    <div class="linha-info">Última Emitida: <span class="valor-destaque" id="ult-emit-AT">--</span></div>
+                    <div class="linha-info">Próxima será: <span class="valor-destaque valor-proxima" id="prox-emit-AT">AT 01</span></div>
+                    <div class="linha-info">Última na TV: <span class="valor-destaque valor-tv" id="ult-tv-AT">--</span></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div style="margin-top: 30px; text-align: center;">
+        <button onclick="confirmarReset()" style="background: #1f2937; color: #f87171; border: 2px solid #f87171; padding: 15px 30px; border-radius: 12px; font-size: 16px; font-weight: 800; cursor: pointer; text-transform: uppercase; transition: 0.2s;">
+            ⚠️ Resetar Sistema Completo
+        </button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let bloqueado = false; 
+        
+        // Memórias locais para rastrear os números sem depender do servidor enviar tudo
+        let maxNumeros = { 'RP': 0, 'R': 0, 'CP': 0, 'C': 0, 'AT': 0 };
+        let ultimasEmitidas = { 'RP': '--', 'R': '--', 'CP': '--', 'C': '--', 'AT': '--' };
+        let ultimasTV = { 'RP': '--', 'R': '--', 'CP': '--', 'C': '--', 'AT': '--' };
+
+        function emitirSenha(siglaFila) {
+            if (bloqueado) return;
+            bloqueado = true;
+
+            socket.emit('adicionar_ficha', { 
+                filaOpcao: siglaFila, 
+                nome: '' 
+            });
+
+            // Registra localmente que esta foi a última que você clicou para emitir
+            const proximoNumFormatado = (maxNumeros[siglaFila] + 1).toString().padStart(2, '0');
+            ultimasEmitidas[siglaFila] = `${siglaFila} ${proximoNumFormatado}`;
+
+            // Trava de 0.5s para evitar duplo clique e geração de duas senhas sem querer
+            setTimeout(() => { bloqueado = false; }, 500);
+        }
+
+        function confirmarReset() {
+            if (confirm("ATENÇÃO: Isso apagará TODAS as fichas, zerará os contadores e limpará a TV. Deseja continuar?")) {
+                socket.emit('resetar_sistema');
+            }
+        }
+
+        // Rastreando a TV em tempo real
+        socket.on('tocar_chamada_tv', (dados) => {
+            const sigla = dados.ficha.split(' ')[0]; // Pega só o prefixo (Ex: RP)
+            if (ultimasTV[sigla] !== undefined) {
+                ultimasTV[sigla] = dados.ficha;
+                document.getElementById(`ult-tv-${sigla}`).innerText = dados.ficha;
+            }
+        });
+
+        // Limpando rastreadores caso o sistema seja resetado
+        socket.on('sistema_resetado', () => {
+            maxNumeros = { 'RP': 0, 'R': 0, 'CP': 0, 'C': 0, 'AT': 0 };
+            ultimasEmitidas = { 'RP': '--', 'R': '--', 'CP': '--', 'C': '--', 'AT': '--' };
+            ultimasTV = { 'RP': '--', 'R': '--', 'CP': '--', 'C': '--', 'AT': '--' };
+            
+            ['RP', 'R', 'CP', 'C', 'AT'].forEach(sigla => {
+                document.getElementById(`ult-emit-${sigla}`).innerText = '--';
+                document.getElementById(`prox-emit-${sigla}`).innerText = `${sigla} 01`;
+                document.getElementById(`ult-tv-${sigla}`).innerText = '--';
+            });
+            alert("Sistema reiniciado com sucesso!");
+        });
+
+        // Ouvindo a fila para atualizar os totais e adivinhar a próxima
+        socket.on('atualizar_fila', (filaGlobal) => {
+            let totalReg = 0, totalComp = 0, totalAut = 0;
+            const tiposDeFila = ['RP', 'R', 'CP', 'C', 'AT'];
+            
+            // 1. Calcula o total de pacientes aguardando por setor
+            filaGlobal.forEach(p => {
+                if (p.status === 'LOBBY') {
+                    if (p.fila === 'RP' || p.fila === 'R') totalReg++;
+                    else if (p.fila === 'CP' || p.fila === 'C') totalComp++;
+                    else if (p.fila === 'AT') totalAut++;
+                }
+
+                // Verifica o maior número já gerado no sistema para não perder a conta
+                const numFicha = parseInt(p.ficha.split(' ')[1], 10);
+                if (numFicha > maxNumeros[p.fila]) {
+                    maxNumeros[p.fila] = numFicha;
+                }
+            });
+
+            // 2. Atualiza os visores de Total na tela
+            document.getElementById('total-REG').innerText = totalReg;
+            document.getElementById('total-COMP').innerText = totalComp;
+            document.getElementById('total-AUT').innerText = totalAut;
+
+            // 3. Atualiza os rastreadores de emissão debaixo de cada botão
+            tiposDeFila.forEach(sigla => {
+                // Se alguém deletar a ficha, não queremos que o contador volte para trás.
+                // O próximo número é sempre o maior número já visto + 1.
+                const proxNum = maxNumeros[sigla] + 1;
+                const proxFormatado = `${sigla} ${proxNum.toString().padStart(2, '0')}`;
+                
+                document.getElementById(`prox-emit-${sigla}`).innerText = proxFormatado;
+                document.getElementById(`ult-emit-${sigla}`).innerText = ultimasEmitidas[sigla];
+            });
+        });
+    </script>
+</body>
+</html>
