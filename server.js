@@ -265,6 +265,7 @@ io.on('connection', (socket) => {
     socket.emit('atualizar_painel_setores', ultimosChamados);
     enviarQuantitativosFila();
     socket.emit('estado_servidor', obterEstadoAtual());
+    socket.emit('atualizar_media_setores', calcularMediaPorSetor());
 
     socket.on('adicionar_ficha', (dados) => {
         const numero = contadores[dados.filaOpcao].toString().padStart(2, '0');
@@ -397,4 +398,3 @@ async function iniciarServidor() {
 }
 
 iniciarServidor();
-
