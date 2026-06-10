@@ -20,11 +20,43 @@
             color: white; 
             padding: 15px 30px; 
             border-radius: 12px; 
-            margin-bottom: 25px; 
+            margin-bottom: 15px; 
             display: flex; 
             justify-content: space-between; 
             align-items: center;
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        .media-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 20px 25px;
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 15px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            border: 1px solid #e5e7eb;
+        }
+        .media-item {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            color: #111827;
+        }
+        .media-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #6b7280;
+        }
+        .media-value {
+            font-size: 26px;
+            font-weight: 900;
+            color: #111827;
         }
         .header-titulo { font-size: 22px; font-weight: 800; text-transform: uppercase; }
         
@@ -114,7 +146,22 @@
         <div class="header-titulo">Controle da Porta</div>
         <button class="btn-sair" onclick="window.location.href='index.html'">SAIR</button>
     </div>
-    
+
+    <div class="media-panel">
+        <div class="media-item">
+            <div class="media-title">Média Regulação</div>
+            <div class="media-value" id="media-regulacao">0 min</div>
+        </div>
+        <div class="media-item">
+            <div class="media-title">Média Complexidade</div>
+            <div class="media-value" id="media-complexidade">0 min</div>
+        </div>
+        <div class="media-item">
+            <div class="media-title">Média Autorização</div>
+            <div class="media-value" id="media-autorizacao">0 min</div>
+        </div>
+    </div>
+
     <div id="container-setores"></div>
     <div class="rodape">
         <div class="metrica-total">Total Aguardando Geral: <span id="total-pacientes">0</span></div>
@@ -172,8 +219,23 @@
         socket.on('solicitar_estado_cliente', () => {
             const estado = obterEstadoLocal();
             if (estado) {
+                console.log('📤 Enviando estado para servidor');
                 socket.emit('resposta_estado_cliente', estado);
             }
+        });
+
+        socket.on('reconnect', () => {
+            console.log('🔗 Reconectado ao servidor');
+            const estado = obterEstadoLocal();
+            if (estado) {
+                socket.emit('resposta_estado_cliente', estado);
+            }
+        });
+
+        socket.on('atualizar_media_setores', (media) => {
+            document.getElementById('media-regulacao').innerText = `${media.REGULACAO} min`;
+            document.getElementById('media-complexidade').innerText = `${media.COMPLEXIDADE} min`;
+            document.getElementById('media-autorizacao').innerText = `${media.AUTORIZACAO} min`;
         });
 
         socket.on('bloqueio_tv_ocupada', () => { tvOcupadaGlobal = true; renderizar(); });
