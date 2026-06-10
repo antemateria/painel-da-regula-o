@@ -196,7 +196,7 @@
             if (!estadoLocalSalvavel(estado)) return false;
             return estado.filaPacientes.length > 0
                 || estado.contadores.RP > 1 || estado.contadores.R > 1 || estado.contadores.CP > 1 || estado.contadores.C > 1 || estado.contadores.AT > 1
-                || estado.turnos.REGULACAO !== 'P' || estado.turnos.COMPLEXIDADE !== 'P';
+                || estado.turnos.REGULACAO !== 'P' || estado.turnos.COMPLEXIDADE !== 'P' || estado.turnos.AUTORIZACAO !== 'P';
         }
 
         function obterEstadoLocal() {
