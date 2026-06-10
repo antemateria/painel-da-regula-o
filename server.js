@@ -1,6 +1,8 @@
 const express = require('express');
 const http = require('http');
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -22,9 +24,9 @@ let ultimosChamados = {
 
 let filaDeEsperaTV = []; 
 let tvFalando = false;   
-let timerSegurancaTV = null; 
-let estadoSolicitado = false;
-let timerSolicitacaoEstado = null;
+let timerSegurancaTV = null;
+
+const dadosPath = path.join(__dirname, 'dados.json');
 
 function obterEstadoAtual() {
     return {
@@ -35,66 +37,33 @@ function obterEstadoAtual() {
     };
 }
 
-function validarEstadoCliente(dados) {
-    return dados
-        && Array.isArray(dados.filaPacientes)
-        && dados.filaPacientes.every(item => item && typeof item.ficha === 'string' && typeof item.setor === 'string')
-        && dados.contadores && typeof dados.contadores === 'object'
-        && typeof dados.contadores.RP === 'number'
-        && typeof dados.contadores.R === 'number'
-        && typeof dados.contadores.CP === 'number'
-        && typeof dados.contadores.C === 'number'
-        && typeof dados.contadores.AT === 'number'
-        && dados.turnos && typeof dados.turnos === 'object'
-        && typeof dados.turnos.REGULACAO === 'string'
-        && typeof dados.turnos.COMPLEXIDADE === 'string'
-        && dados.ultimosChamados && typeof dados.ultimosChamados === 'object';
+function salvarDados() {
+    try {
+        fs.writeFileSync(dadosPath, JSON.stringify(obterEstadoAtual(), null, 2), 'utf8');
+    } catch (err) {
+        console.error('❌ Erro ao salvar dados.json:', err);
+    }
 }
 
-function estadoEstaVazio() {
-    const padraoUltimosChamados = [
-        { ficha: '---', nome: 'Nenhum' },
-        { ficha: '---', nome: 'Nenhum' }
-    ];
-    return filaPacientes.length === 0
-        && contadores.RP === 1 && contadores.R === 1 && contadores.CP === 1 && contadores.C === 1 && contadores.AT === 1
-        && turnos.REGULACAO === 'P' && turnos.COMPLEXIDADE === 'P'
-        && JSON.stringify(ultimosChamados['Regulação']) === JSON.stringify(padraoUltimosChamados)
-        && JSON.stringify(ultimosChamados['Complexidade']) === JSON.stringify(padraoUltimosChamados)
-        && JSON.stringify(ultimosChamados['Autorização']) === JSON.stringify(padraoUltimosChamados);
+function carregarDados() {
+    try {
+        if (!fs.existsSync(dadosPath)) return;
+        const raw = fs.readFileSync(dadosPath, 'utf8');
+        const dados = JSON.parse(raw);
+
+        if (dados && Array.isArray(dados.filaPacientes)) filaPacientes = dados.filaPacientes;
+        if (dados && typeof dados.contadores === 'object' && dados.contadores !== null) contadores = dados.contadores;
+        if (dados && typeof dados.turnos === 'object' && dados.turnos !== null) turnos = dados.turnos;
+        if (dados && typeof dados.ultimosChamados === 'object' && dados.ultimosChamados !== null) ultimosChamados = dados.ultimosChamados;
+
+        console.log('✅ Dados carregados de dados.json');
+    } catch (err) {
+        console.error('❌ Erro ao carregar dados.json:', err);
+    }
 }
 
 function emitirEstadoCompleto() {
     io.emit('estado_servidor', obterEstadoAtual());
-}
-
-function restaurarEstadoDoCliente(dados) {
-    filaPacientes = Array.isArray(dados.filaPacientes) ? dados.filaPacientes : [];
-    contadores = dados.contadores || contadores;
-    turnos = dados.turnos || turnos;
-    ultimosChamados = dados.ultimosChamados || ultimosChamados;
-    estadoSolicitado = false;
-    clearTimeout(timerSolicitacaoEstado);
-    console.log('✅ Estado restaurado pelo cliente via localStorage - Fichas:', filaPacientes.length);
-    io.emit('atualizar_fila', filaPacientes);
-    io.emit('atualizar_painel_setores', ultimosChamados);
-    enviarQuantitativosFila();
-    emitirEstadoCompleto();
-}
-
-function solicitarEstadoComRetry() {
-    if (estadoSolicitado) return;
-    estadoSolicitado = true;
-    console.log('🔄 Solicitando estado dos clientes...');
-    io.emit('solicitar_estado_cliente');
-    
-    timerSolicitacaoEstado = setTimeout(() => {
-        if (estadoEstaVazio()) {
-            console.log('⏱️ Timeout: nenhum cliente respondeu, tentando novamente em 2s...');
-            estadoSolicitado = false;
-            setTimeout(() => solicitarEstadoComRetry(), 2000);
-        }
-    }, 3000);
 }
 
 const mapeamentoSetores = {
@@ -121,6 +90,7 @@ function realizarResetGeral() {
     io.emit('limpar_tv'); 
     io.emit('sistema_resetado');
     emitirEstadoCompleto();
+    salvarDados();
     console.log("⏰ Sistema resetado automaticamente!");
 }
 
@@ -219,16 +189,6 @@ io.on('connection', (socket) => {
     enviarQuantitativosFila();
     socket.emit('estado_servidor', obterEstadoAtual());
 
-    if (estadoEstaVazio() && !estadoSolicitado) {
-        solicitarEstadoComRetry();
-    }
-    
-    socket.on('resposta_estado_cliente', (dados) => {
-        if (estadoEstaVazio() && validarEstadoCliente(dados)) {
-            restaurarEstadoDoCliente(dados);
-        }
-    });
-
     socket.on('adicionar_ficha', (dados) => {
         const numero = contadores[dados.filaOpcao].toString().padStart(2, '0');
         const codigoFicha = `${dados.filaOpcao} ${numero}`;
@@ -247,6 +207,7 @@ io.on('connection', (socket) => {
         io.emit('atualizar_fila', filaPacientes);
         enviarQuantitativosFila();
         emitirEstadoCompleto();
+        salvarDados();
     });
 
     socket.on('chamar_para_atendimento', (setorDoPainel) => {
@@ -279,6 +240,7 @@ io.on('connection', (socket) => {
             io.emit('atualizar_fila', filaPacientes);
             enviarQuantitativosFila();
             emitirEstadoCompleto();
+            salvarDados();
         } else {
             socket.emit('erro_sem_paciente_na_sala', 'Não há pacientes aguardando para o seu setor.');
         }
@@ -296,6 +258,7 @@ io.on('connection', (socket) => {
             const isPriority = siglaFicha.endsWith('P');
             turnos[setor] = isPriority ? 'P' : 'N';
             emitirEstadoCompleto();
+            salvarDados();
         }
 
         socket.emit('guiche_liberado_com_sucesso');
@@ -311,12 +274,15 @@ io.on('connection', (socket) => {
         io.emit('atualizar_fila', filaPacientes);
         enviarQuantitativosFila();
         emitirEstadoCompleto();
+        salvarDados();
     });
 
     socket.on('resetar_sistema', () => {
         realizarResetGeral();
     });
 });
+
+carregarDados();
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`🚀 Motor rodando na porta ${PORT}`));
