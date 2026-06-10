@@ -146,6 +146,55 @@
         let emCooldown = false;
         let timerCooldown;
 
+const STORAGE_KEY = 'painel_estado';
+
+function salvarEstadoLocal(estado) {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
+    } catch (error) {
+        console.warn('Falha ao salvar estado local:', error);
+    }
+}
+
+function estadoLocalSalvavel(estado) {
+    return estado
+        && Array.isArray(estado.filaPacientes)
+        && estado.contadores && typeof estado.contadores === 'object'
+        && estado.turnos && typeof estado.turnos === 'object'
+        && estado.ultimosChamados && typeof estado.ultimosChamados === 'object';
+}
+
+function estadoLocalRestauravel(estado) {
+    if (!estadoLocalSalvavel(estado)) return false;
+    return estado.filaPacientes.length > 0
+        || estado.contadores.RP > 1 || estado.contadores.R > 1 || estado.contadores.CP > 1 || estado.contadores.C > 1 || estado.contadores.AT > 1
+        || estado.turnos.REGULACAO !== 'P' || estado.turnos.COMPLEXIDADE !== 'P';
+}
+
+function obterEstadoLocal() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        const estado = JSON.parse(raw);
+        return estadoLocalRestauravel(estado) ? estado : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+socket.on('estado_servidor', (estado) => {
+    if (estadoLocalSalvavel(estado)) {
+        salvarEstadoLocal(estado);
+    }
+});
+
+socket.on('solicitar_estado_cliente', () => {
+    const estado = obterEstadoLocal();
+    if (estado) {
+        socket.emit('resposta_estado_cliente', estado);
+    }
+});
+
         function formatarTempo(minutosTotais) {
             if (minutosTotais < 60) {
                 return `${minutosTotais} min`;
