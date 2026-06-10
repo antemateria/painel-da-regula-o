@@ -22,6 +22,62 @@ let ultimosChamados = {
 let filaDeEsperaTV = []; 
 let tvFalando = false;   
 let timerSegurancaTV = null; 
+let estadoSolicitado = false;
+
+function obterEstadoAtual() {
+    return {
+        filaPacientes,
+        contadores,
+        turnos,
+        ultimosChamados
+    };
+}
+
+function validarEstadoCliente(dados) {
+    return dados
+        && Array.isArray(dados.filaPacientes)
+        && dados.filaPacientes.every(item => item && typeof item.ficha === 'string' && typeof item.setor === 'string')
+        && dados.contadores && typeof dados.contadores === 'object'
+        && typeof dados.contadores.RP === 'number'
+        && typeof dados.contadores.R === 'number'
+        && typeof dados.contadores.CP === 'number'
+        && typeof dados.contadores.C === 'number'
+        && typeof dados.contadores.AT === 'number'
+        && dados.turnos && typeof dados.turnos === 'object'
+        && typeof dados.turnos.REGULACAO === 'string'
+        && typeof dados.turnos.COMPLEXIDADE === 'string'
+        && dados.ultimosChamados && typeof dados.ultimosChamados === 'object';
+}
+
+function estadoEstaVazio() {
+    const padraoUltimosChamados = [
+        { ficha: '---', nome: 'Nenhum' },
+        { ficha: '---', nome: 'Nenhum' }
+    ];
+    return filaPacientes.length === 0
+        && contadores.RP === 1 && contadores.R === 1 && contadores.CP === 1 && contadores.C === 1 && contadores.AT === 1
+        && turnos.REGULACAO === 'P' && turnos.COMPLEXIDADE === 'P'
+        && JSON.stringify(ultimosChamados['Regulação']) === JSON.stringify(padraoUltimosChamados)
+        && JSON.stringify(ultimosChamados['Complexidade']) === JSON.stringify(padraoUltimosChamados)
+        && JSON.stringify(ultimosChamados['Autorização']) === JSON.stringify(padraoUltimosChamados);
+}
+
+function emitirEstadoCompleto() {
+    io.emit('estado_servidor', obterEstadoAtual());
+}
+
+function restaurarEstadoDoCliente(dados) {
+    filaPacientes = Array.isArray(dados.filaPacientes) ? dados.filaPacientes : [];
+    contadores = dados.contadores || contadores;
+    turnos = dados.turnos || turnos;
+    ultimosChamados = dados.ultimosChamados || ultimosChamados;
+    estadoSolicitado = false;
+    console.log('✅ Estado restaurado pelo cliente via localStorage');
+    io.emit('atualizar_fila', filaPacientes);
+    io.emit('atualizar_painel_setores', ultimosChamados);
+    enviarQuantitativosFila();
+    emitirEstadoCompleto();
+}
 
 const mapeamentoSetores = {
     'RP': 'Regulação', 'R': 'Regulação',
@@ -46,6 +102,7 @@ function realizarResetGeral() {
     io.emit('liberar_botoes_tv_livre');
     io.emit('limpar_tv'); 
     io.emit('sistema_resetado');
+    emitirEstadoCompleto();
     console.log("⏰ Sistema resetado automaticamente!");
 }
 
@@ -142,7 +199,19 @@ io.on('connection', (socket) => {
     socket.emit('atualizar_fila', filaPacientes);
     socket.emit('atualizar_painel_setores', ultimosChamados);
     enviarQuantitativosFila();
+    socket.emit('estado_servidor', obterEstadoAtual());
+
+    if (estadoEstaVazio() && !estadoSolicitado) {
+        estadoSolicitado = true;
+        io.emit('solicitar_estado_cliente');
+    }
     
+    socket.on('resposta_estado_cliente', (dados) => {
+        if (estadoEstaVazio() && validarEstadoCliente(dados)) {
+            restaurarEstadoDoCliente(dados);
+        }
+    });
+
     socket.on('adicionar_ficha', (dados) => {
         const numero = contadores[dados.filaOpcao].toString().padStart(2, '0');
         const codigoFicha = `${dados.filaOpcao} ${numero}`;
@@ -160,6 +229,7 @@ io.on('connection', (socket) => {
         filaPacientes.push(novaFicha);
         io.emit('atualizar_fila', filaPacientes);
         enviarQuantitativosFila();
+        emitirEstadoCompleto();
     });
 
     socket.on('chamar_para_atendimento', (setorDoPainel) => {
@@ -191,6 +261,7 @@ io.on('connection', (socket) => {
             io.emit('atualizar_painel_setores', ultimosChamados);
             io.emit('atualizar_fila', filaPacientes);
             enviarQuantitativosFila();
+            emitirEstadoCompleto();
         } else {
             socket.emit('erro_sem_paciente_na_sala', 'Não há pacientes aguardando para o seu setor.');
         }
@@ -207,6 +278,7 @@ io.on('connection', (socket) => {
         if (resultado === 'falta' && setor !== 'AUTORIZACAO') {
             const isPriority = siglaFicha.endsWith('P');
             turnos[setor] = isPriority ? 'P' : 'N';
+            emitirEstadoCompleto();
         }
 
         socket.emit('guiche_liberado_com_sucesso');
@@ -221,6 +293,7 @@ io.on('connection', (socket) => {
         filaPacientes = filaPacientes.filter(p => p.id !== idFicha);
         io.emit('atualizar_fila', filaPacientes);
         enviarQuantitativosFila();
+        emitirEstadoCompleto();
     });
 
     socket.on('resetar_sistema', () => {
