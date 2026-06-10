@@ -8,6 +8,7 @@ const io = new Server(server);
 
 app.use(express.static('public'));
 
+// --- MEMÓRIA CENTRAL DO SISTEMA ---
 let filaPacientes = []; 
 let contadores = { 'RP': 1, 'R': 1, 'CP': 1, 'C': 1, 'AT': 1 };
 let turnos = { 'REGULACAO': 'P', 'COMPLEXIDADE': 'P' };
@@ -23,11 +24,12 @@ let tvFalando = false;
 let timerSegurancaTV = null; 
 
 const mapeamentoSetores = {
-    RP: 'Regulação', R: 'Regulação',
-    CP: 'Complexidade', C: 'Complexidade',
-    AT: 'Autorização'
+    'RP': 'Regulação', 'R': 'Regulação',
+    'CP': 'Complexidade', 'C': 'Complexidade',
+    'AT': 'Autorização'
 };
 
+// 🌟 FUNÇÃO DE RESET COMPLETO (USADA NO BOTÃO E NO TIMER DA MEIA-NOITE)
 function realizarResetGeral() {
     clearTimeout(timerSegurancaTV);
     filaPacientes = []; filaDeEsperaTV = []; tvFalando = false; 
@@ -38,29 +40,35 @@ function realizarResetGeral() {
         'Complexidade': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
         'Autorização': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ]
     };
-
     io.emit('atualizar_fila', filaPacientes);
     io.emit('atualizar_painel_setores', ultimosChamados);
     enviarQuantitativosFila();
     io.emit('liberar_botoes_tv_livre');
-    io.emit('limpar_tv');
+    io.emit('limpar_tv'); 
     io.emit('sistema_resetado');
-    console.log('⏰ Sistema resetado automaticamente!');
+    console.log("⏰ Sistema resetado automaticamente!");
 }
 
+// 🌟 TIMER AUTOMÁTICO PARA A MEIA-NOITE
 function agendarResetMeiaNoite() {
     const agora = new Date();
     const meiaNoite = new Date();
-    meiaNoite.setHours(24, 0, 0, 0);
+    
+    meiaNoite.setHours(24, 0, 0, 0); // Define para a próxima meia-noite
+    
     const tempoAteMeiaNoite = meiaNoite.getTime() - agora.getTime();
-
+    
     setTimeout(() => {
         realizarResetGeral();
+        // Depois do primeiro reset, agenda para rodar a cada 24 horas
         setInterval(realizarResetGeral, 24 * 60 * 60 * 1000);
     }, tempoAteMeiaNoite);
 }
+agendarResetMeiaNoite(); // Ativa o agendamento ao ligar o servidor
 
-const URL_DO_SEU_SISTEMA = "https://painel-da-regulacao.onrender.com";
+// 🌟 SISTEMA ANTI-COCHILO (PING AUTOMÁTICO A CADA 10 MINUTOS)
+// Substitua o link abaixo pelo link VERDE real que o Render te deu!
+const URL_DO_SEU_SISTEMA = "https://painel-da-regulacao.onrender.com"; 
 
 setInterval(() => {
     http.get(URL_DO_SEU_SISTEMA, (res) => {
@@ -68,9 +76,8 @@ setInterval(() => {
     }).on('error', (err) => {
         console.log("❌ Erro no ping anti-cochilo:", err.message);
     });
-}, 10 * 60 * 1000);
+}, 10 * 60 * 1000); // 10 minutos em milissegundos
 
-agendarResetMeiaNoite();
 
 function enviarQuantitativosFila() {
     const quantitativos = {
@@ -89,7 +96,7 @@ function enfileirarChamadaTV(pacoteDeChamada) {
     }
 }
 
-function ejecutarDisparoTV(pacoteDeChamada) {
+function executarDisparoTV(pacoteDeChamada) {
     tvFalando = true;
     io.emit('bloqueio_tv_ocupada', pacoteDeChamada);
     io.emit('tocar_chamada_tv', { ficha: pacoteDeChamada.ficha });
@@ -223,3 +230,4 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`🚀 Motor rodando na porta ${PORT}`));
+
