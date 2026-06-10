@@ -324,7 +324,6 @@
             // Registra localmente que esta foi a última que você clicou para emitir
             const proximoNumFormatado = (maxNumeros[siglaFila] + 1).toString().padStart(2, '0');
             ultimasEmitidas[siglaFila] = `${siglaFila} ${proximoNumFormatado}`;
-            atualizarInfoFixa();
 
             // Trava de 0.5s para evitar duplo clique e geração de duas senhas sem querer
             setTimeout(() => { bloqueado = false; }, 500);
