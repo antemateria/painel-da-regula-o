@@ -296,7 +296,7 @@ const PORT = process.env.PORT || 3000;
 
 async function startServer() {
     try {
-        await mongoose.connect(mongoUri, { useNewUrlParser: true, useUnifiedTopology: true });
+        await mongoose.connect(mongoUri);
         console.log('✅ Conectado ao MongoDB');
 
         await carregarEstado();
