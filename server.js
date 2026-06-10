@@ -139,6 +139,8 @@ setInterval(() => {
     });
 }, 10 * 60 * 1000);
 
+agendarResetMeiaNoite();
+
 function enviarQuantitativosFila() {
     const quantitativos = {
         'REGULACAO': filaPacientes.filter(p => p.setor === 'Regulação' && p.status === 'LOBBY').length,
@@ -296,7 +298,7 @@ const PORT = process.env.PORT || 3000;
 
 async function startServer() {
     try {
-        await mongoose.connect(mongoUri);
+        await mongoose.connect(mongoUri, { useNewUrlParser: true, useUnifiedTopology: true });
         console.log('✅ Conectado ao MongoDB');
 
         await carregarEstado();
