@@ -1,7 +1,6 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const mongoose = require('mongoose');
 
 const app = express();
 const server = http.createServer(app);
@@ -9,56 +8,19 @@ const io = new Server(server);
 
 app.use(express.static('public'));
 
-const mongoUri = 'mongodb+srv://moisesdantasaraujo7403_db_user:pFbD4UrZaMnLPlrO@cluster0.ylbvdc1.mongodb.net/?appName=Cluster0';
+let filaPacientes = []; 
+let contadores = { 'RP': 1, 'R': 1, 'CP': 1, 'C': 1, 'AT': 1 };
+let turnos = { 'REGULACAO': 'P', 'COMPLEXIDADE': 'P' };
 
-const estadoSchema = new mongoose.Schema({
-    key: { type: String, required: true, unique: true },
-    filaPacientes: [{
-        id: String,
-        ficha: String,
-        nome: String,
-        setor: String,
-        fila: String,
-        status: String
-    }],
-    contadores: {
-        RP: { type: Number, default: 1 },
-        R: { type: Number, default: 1 },
-        CP: { type: Number, default: 1 },
-        C: { type: Number, default: 1 },
-        AT: { type: Number, default: 1 }
-    },
-    turnos: {
-        REGULACAO: { type: String, default: 'P' },
-        COMPLEXIDADE: { type: String, default: 'P' }
-    },
-    ultimosChamados: {
-        Regulação: [{ ficha: String, nome: String }],
-        Complexidade: [{ ficha: String, nome: String }],
-        Autorização: [{ ficha: String, nome: String }]
-    }
-}, { timestamps: true });
-
-const SystemState = mongoose.model('SystemState', estadoSchema);
-
-const estadoPadrao = {
-    filaPacientes: [],
-    contadores: { RP: 1, R: 1, CP: 1, C: 1, AT: 1 },
-    turnos: { REGULACAO: 'P', COMPLEXIDADE: 'P' },
-    ultimosChamados: {
-        Regulação: [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
-        Complexidade: [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
-        Autorização: [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ]
-    }
+let ultimosChamados = {
+    'Regulação': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
+    'Complexidade': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
+    'Autorização': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ]
 };
 
-let filaPacientes = [];
-let contadores = { RP: 1, R: 1, CP: 1, C: 1, AT: 1 };
-let turnos = { REGULACAO: 'P', COMPLEXIDADE: 'P' };
-let ultimosChamados = { ...estadoPadrao.ultimosChamados };
-let filaDeEsperaTV = [];
-let tvFalando = false;
-let timerSegurancaTV = null;
+let filaDeEsperaTV = []; 
+let tvFalando = false;   
+let timerSegurancaTV = null; 
 
 const mapeamentoSetores = {
     RP: 'Regulação', R: 'Regulação',
@@ -66,45 +28,16 @@ const mapeamentoSetores = {
     AT: 'Autorização'
 };
 
-async function carregarEstado() {
-    const documento = await SystemState.findOne({ key: 'main' }).lean();
-    if (documento) {
-        filaPacientes = documento.filaPacientes || [];
-        contadores = documento.contadores || { ...estadoPadrao.contadores };
-        turnos = documento.turnos || { ...estadoPadrao.turnos };
-        ultimosChamados = documento.ultimosChamados || { ...estadoPadrao.ultimosChamados };
-        console.log('✅ Estado carregado do MongoDB');
-        return;
-    }
-
-    await SystemState.create({ key: 'main', ...estadoPadrao });
-    console.log('✅ Estado padrão criado no MongoDB');
-}
-
-async function salvarEstado() {
-    await SystemState.findOneAndUpdate(
-        { key: 'main' },
-        { filaPacientes, contadores, turnos, ultimosChamados },
-        { upsert: true, setDefaultsOnInsert: true }
-    );
-}
-
-function obterUltimosChamadosPadrao() {
-    return {
-        Regulação: [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
-        Complexidade: [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
-        Autorização: [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ]
-    };
-}
-
 function realizarResetGeral() {
     clearTimeout(timerSegurancaTV);
-    filaPacientes = [];
-    filaDeEsperaTV = [];
-    tvFalando = false;
-    contadores = { ...estadoPadrao.contadores };
-    turnos = { ...estadoPadrao.turnos };
-    ultimosChamados = obterUltimosChamadosPadrao();
+    filaPacientes = []; filaDeEsperaTV = []; tvFalando = false; 
+    contadores = { 'RP': 1, 'R': 1, 'CP': 1, 'C': 1, 'AT': 1 };
+    turnos = { 'REGULACAO': 'P', 'COMPLEXIDADE': 'P' };
+    ultimosChamados = {
+        'Regulação': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
+        'Complexidade': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
+        'Autorização': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ]
+    };
 
     io.emit('atualizar_fila', filaPacientes);
     io.emit('atualizar_painel_setores', ultimosChamados);
@@ -112,8 +45,6 @@ function realizarResetGeral() {
     io.emit('liberar_botoes_tv_livre');
     io.emit('limpar_tv');
     io.emit('sistema_resetado');
-
-    salvarEstado().catch((err) => console.error('❌ Falha ao salvar estado no reset:', err));
     console.log('⏰ Sistema resetado automaticamente!');
 }
 
@@ -222,7 +153,6 @@ io.on('connection', (socket) => {
         filaPacientes.push(novaFicha);
         io.emit('atualizar_fila', filaPacientes);
         enviarQuantitativosFila();
-        salvarEstado().catch((err) => console.error('❌ Falha ao salvar estado ao adicionar ficha:', err));
     });
 
     socket.on('chamar_para_atendimento', (setorDoPainel) => {
@@ -254,7 +184,6 @@ io.on('connection', (socket) => {
             io.emit('atualizar_painel_setores', ultimosChamados);
             io.emit('atualizar_fila', filaPacientes);
             enviarQuantitativosFila();
-            salvarEstado().catch((err) => console.error('❌ Falha ao salvar estado após chamada:', err));
         } else {
             socket.emit('erro_sem_paciente_na_sala', 'Não há pacientes aguardando para o seu setor.');
         }
@@ -271,7 +200,6 @@ io.on('connection', (socket) => {
         if (resultado === 'falta' && setor !== 'AUTORIZACAO') {
             const isPriority = siglaFicha.endsWith('P');
             turnos[setor] = isPriority ? 'P' : 'N';
-            salvarEstado().catch((err) => console.error('❌ Falha ao salvar estado após conclusão:', err));
         }
 
         socket.emit('guiche_liberado_com_sucesso');
@@ -286,7 +214,6 @@ io.on('connection', (socket) => {
         filaPacientes = filaPacientes.filter(p => p.id !== idFicha);
         io.emit('atualizar_fila', filaPacientes);
         enviarQuantitativosFila();
-        salvarEstado().catch((err) => console.error('❌ Falha ao salvar estado ao excluir ficha:', err));
     });
 
     socket.on('resetar_sistema', () => {
@@ -295,20 +222,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-
-async function startServer() {
-    try {
-        await mongoose.connect(mongoUri, { useNewUrlParser: true, useUnifiedTopology: true });
-        console.log('✅ Conectado ao MongoDB');
-
-        await carregarEstado();
-        agendarResetMeiaNoite();
-
-        server.listen(PORT, () => console.log(`🚀 Motor rodando na porta ${PORT}`));
-    } catch (error) {
-        console.error('❌ Erro ao iniciar o servidor:', error);
-        process.exit(1);
-    }
-}
-
-startServer();
+server.listen(PORT, () => console.log(`🚀 Motor rodando na porta ${PORT}`));
