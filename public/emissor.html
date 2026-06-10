@@ -30,8 +30,41 @@
             align-items: center;
             padding: 15px 30px;
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-            margin-bottom: 25px;
+            margin-bottom: 15px;
             box-sizing: border-box;
+        }
+        .info-fixa {
+            position: sticky;
+            top: 0;
+            width: 100%;
+            max-width: 650px;
+            margin: 0 auto 20px auto;
+            background: white;
+            border: 1px solid #d1d5db;
+            border-radius: 12px;
+            padding: 15px 20px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.06);
+            z-index: 5;
+        }
+        .info-bloco {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .info-bloco span:first-child {
+            color: #6b7280;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .info-bloco span:last-child {
+            color: #111827;
+            font-size: 16px;
+            font-weight: 900;
         }
 
         .cabecalho-textos h1 { margin: 0; font-size: 22px; font-weight: 900; text-transform: uppercase; }
@@ -91,6 +124,17 @@
             <p>Recepção</p>
         </div>
         <button class="btn-sair" onclick="window.location.href='index.html'">SAIR</button>
+    </div>
+
+    <div class="info-fixa" id="info-fixa">
+        <div class="info-bloco">
+            <span>Última ficha emitida</span>
+            <span id="fixa-ult-emit">--</span>
+        </div>
+        <div class="info-bloco">
+            <span>Última chamada na TV</span>
+            <span id="fixa-ult-tv">--</span>
+        </div>
     </div>
 
     <div class="container-botoes">
@@ -218,14 +262,55 @@
             if (estadoLocalSalvavel(estado)) {
                 salvarEstadoLocal(estado);
             }
+
+            if (estado && estado.contadores) {
+                Object.keys(estado.contadores).forEach(key => {
+                    maxNumeros[key] = estado.contadores[key] - 1;
+                    const proxima = (estado.contadores[key]).toString().padStart(2, '0');
+                    const proxId = `prox-emit-${key}`;
+                    const proxEl = document.getElementById(proxId);
+                    if (proxEl) proxEl.innerText = `${key} ${proxima}`;
+                });
+            }
+
+            if (estado && estado.ultimosChamados) {
+                ['RP','R','CP','C','AT'].forEach(sigla => {
+                    const setor = sigla === 'AT' ? 'Autorização' : (sigla === 'RP' || sigla === 'R' ? 'Regulação' : 'Complexidade');
+                    const chamado = estado.ultimosChamados[setor] && estado.ultimosChamados[setor][0] ? estado.ultimosChamados[setor][0].ficha : '--';
+                    const id = `ult-tv-${sigla}`;
+                    const el = document.getElementById(id);
+                    if (el) el.innerText = chamado;
+                });
+                const ultimaGeral = ['Regulação','Complexidade','Autorização']
+                    .map(setor => estado.ultimosChamados[setor] && estado.ultimosChamados[setor][0] ? `${estado.ultimosChamados[setor][0].ficha} (${setor})` : null)
+                    .filter(Boolean).shift() || '--';
+                document.getElementById('fixa-ult-tv').innerText = ultimaGeral;
+            }
+
+            const ultimaEmitida = Object.values(ultimasEmitidas).filter(v => v !== '--').pop() || '--';
+            document.getElementById('fixa-ult-emit').innerText = ultimaEmitida;
         });
 
         socket.on('solicitar_estado_cliente', () => {
             const estado = obterEstadoLocal();
             if (estado) {
+                console.log('📤 Enviando estado para servidor');
                 socket.emit('resposta_estado_cliente', estado);
             }
         });
+
+        socket.on('reconnect', () => {
+            console.log('🔗 Reconectado ao servidor');
+            const estado = obterEstadoLocal();
+            if (estado) {
+                socket.emit('resposta_estado_cliente', estado);
+            }
+        });
+
+        function atualizarInfoFixa() {
+            const ultimaEmitida = Object.values(ultimasEmitidas).filter(v => v !== '--').pop() || '--';
+            document.getElementById('fixa-ult-emit').innerText = ultimaEmitida;
+        }
 
         function emitirSenha(siglaFila) {
             if (bloqueado) return;
@@ -239,6 +324,7 @@
             // Registra localmente que esta foi a última que você clicou para emitir
             const proximoNumFormatado = (maxNumeros[siglaFila] + 1).toString().padStart(2, '0');
             ultimasEmitidas[siglaFila] = `${siglaFila} ${proximoNumFormatado}`;
+            atualizarInfoFixa();
 
             // Trava de 0.5s para evitar duplo clique e geração de duas senhas sem querer
             setTimeout(() => { bloqueado = false; }, 500);
