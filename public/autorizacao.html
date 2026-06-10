@@ -102,6 +102,7 @@
                 <div class="em-atendimento" id="status-atendimento">
                     <div class="label-atendimento">Ficha em Atendimento</div>
                     <div class="senha-gigante" id="senha-atual">---</div>
+                    <div class="tempo-ficha" id="tempo-espera-atual">Tempo de espera: 0 min</div>
                     
                     <div class="acoes-paciente">
                         <button class="btn-acao btn-rechamar" onclick="rechamarPaciente()" id="btn-rechamar">🔊 Rechamar</button>
@@ -132,7 +133,11 @@
         const socket = io();
         const MEU_SETOR = 'AUTORIZACAO';
 
-        const operadorLogado = localStorage.getItem('operadorAtual') || 'Desconhecido';
+        let operadorLogado = localStorage.getItem('operadorAtual');
+        if (!operadorLogado) {
+            operadorLogado = prompt('Digite seu nome de operador:') || 'Desconhecido';
+            localStorage.setItem('operadorAtual', operadorLogado);
+        }
         document.getElementById('nome-operador').innerText = operadorLogado;
 
         let pacienteEmAtendimento = null;
@@ -165,7 +170,7 @@
             if (!estadoLocalSalvavel(estado)) return false;
             return estado.filaPacientes.length > 0
                 || estado.contadores.RP > 1 || estado.contadores.R > 1 || estado.contadores.CP > 1 || estado.contadores.C > 1 || estado.contadores.AT > 1
-                || estado.turnos.REGULACAO !== 'P' || estado.turnos.COMPLEXIDADE !== 'P';
+                || estado.turnos.REGULACAO !== 'P' || estado.turnos.COMPLEXIDADE !== 'P' || estado.turnos.AUTORIZACAO !== 'P';
         }
 
         function obterEstadoLocal() {
@@ -188,6 +193,15 @@
         socket.on('solicitar_estado_cliente', () => {
             const estado = obterEstadoLocal();
             if (estado) {
+                console.log('📤 Enviando estado para servidor');
+                socket.emit('resposta_estado_cliente', estado);
+            }
+        });
+
+        socket.on('reconnect', () => {
+            console.log('🔗 Reconectado ao servidor');
+            const estado = obterEstadoLocal();
+            if (estado) {
                 socket.emit('resposta_estado_cliente', estado);
             }
         });
@@ -207,6 +221,17 @@
             localStorage.removeItem('operadorAtual');
             localStorage.removeItem('setorAtual');
             window.location.href = 'index.html';
+        }
+
+        function atualizarTempoEspera() {
+            if (!pacienteEmAtendimento || !pacienteEmAtendimento.horarioEmissao) return;
+            const minutos = patientDiffMinutes(pacienteEmAtendimento.horarioEmissao);
+            document.getElementById('tempo-espera-atual').innerText = `Tempo de espera: ${minutos} min`;
+        }
+
+        function patientDiffMinutes(horarioEmissao) {
+            const diff = Date.now() - new Date(horarioEmissao).getTime();
+            return Math.max(0, Math.floor(diff / 60000));
         }
 
         function alternarAbasFila() {
@@ -253,6 +278,12 @@
             document.getElementById('metric-aguardando').innerText = `${quantitativos[MEU_SETOR]} pacientes`;
         });
 
+        setInterval(() => {
+            if (pacienteEmAtendimento) atualizarTempoEspera();
+        }, 60000);
+
+        socket.on('erro_sem_paciente_na_sala', (msg) => alert(msg));
+
         socket.on('atualizar_fila', (filaGlobal) => {
             const filaFiltrada = filaGlobal.filter(p => p.fila === 'AT');
             const previewContainer = document.getElementById('lista-preview');
@@ -290,8 +321,10 @@
             document.getElementById('status-livre').style.display = 'none';
             document.getElementById('status-atendimento').style.display = 'flex';
             document.getElementById('senha-atual').innerText = dados.paciente.ficha;
-
             document.getElementById('btn-rechamar').innerHTML = '🔊 Rechamar';
+
+            atualizarTempoEspera();
+
             document.getElementById('btn-ausente').disabled = false;
             document.getElementById('btn-atendido').disabled = false;
 
@@ -347,7 +380,9 @@
                 socket.emit('registrar_conclusao_atendimento', {
                     setor: MEU_SETOR,
                     resultado: status,
-                    siglaFicha: pacienteEmAtendimento.fila
+                    siglaFicha: pacienteEmAtendimento.fila,
+                    idFicha: pacienteEmAtendimento.id,
+                    operador: operadorLogado
                 });
             }
         }
