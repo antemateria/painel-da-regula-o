@@ -14,7 +14,7 @@ app.use(express.static('public'));
 // --- MEMÓRIA CENTRAL DO SISTEMA ---
 let filaPacientes = []; 
 let contadores = { 'RP': 1, 'R': 1, 'CP': 1, 'C': 1, 'AT': 1 };
-let turnos = { 'REGULACAO': 'P', 'COMPLEXIDADE': 'P' };
+let turnos = { 'REGULACAO': 'P', 'COMPLEXIDADE': 'P', 'AUTORIZACAO': 'P' };
 
 let ultimosChamados = {
     'Regulação': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
@@ -27,43 +27,120 @@ let tvFalando = false;
 let timerSegurancaTV = null;
 
 const dadosPath = path.join(__dirname, 'dados.json');
+const fsPromises = fs.promises;
+
+function getDataString() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+let atendimentosPorOperador = {};
+let statusDia = { aberto: true, data: getDataString() };
+let historicoAtendimentos = [];
+let pendingWrite = null;
+let lastWriteContent = null;
 
 function obterEstadoAtual() {
     return {
         filaPacientes,
         contadores,
         turnos,
-        ultimosChamados
+        ultimosChamados,
+        statusDia,
+        atendimentosPorOperador
     };
 }
 
 function salvarDados() {
-    try {
-        fs.writeFileSync(dadosPath, JSON.stringify(obterEstadoAtual(), null, 2), 'utf8');
-    } catch (err) {
-        console.error('❌ Erro ao salvar dados.json:', err);
+    const dataString = JSON.stringify({
+        filaPacientes,
+        contadores,
+        turnos,
+        ultimosChamados,
+        statusDia,
+        atendimentosPorOperador,
+        historicoAtendimentos
+    }, null, 2);
+
+    lastWriteContent = dataString;
+
+    if (pendingWrite) {
+        return pendingWrite;
     }
+
+    pendingWrite = fsPromises.writeFile(dadosPath, dataString, 'utf8')
+        .catch((err) => {
+            console.error('❌ Erro ao salvar dados.json:', err);
+        })
+        .then(() => {
+            pendingWrite = null;
+            if (lastWriteContent !== dataString) {
+                salvarDados();
+            }
+        });
+
+    return pendingWrite;
 }
 
-function carregarDados() {
+async function carregarDados() {
     try {
-        if (!fs.existsSync(dadosPath)) return;
-        const raw = fs.readFileSync(dadosPath, 'utf8');
+        await fsPromises.access(dadosPath, fs.constants.F_OK);
+        const raw = await fsPromises.readFile(dadosPath, 'utf8');
         const dados = JSON.parse(raw);
 
         if (dados && Array.isArray(dados.filaPacientes)) filaPacientes = dados.filaPacientes;
         if (dados && typeof dados.contadores === 'object' && dados.contadores !== null) contadores = dados.contadores;
-        if (dados && typeof dados.turnos === 'object' && dados.turnos !== null) turnos = dados.turnos;
+        if (dados && typeof dados.turnos === 'object' && dados.turnos !== null) {
+            turnos = Object.assign({ 'REGULACAO': 'P', 'COMPLEXIDADE': 'P', 'AUTORIZACAO': 'P' }, dados.turnos);
+        }
         if (dados && typeof dados.ultimosChamados === 'object' && dados.ultimosChamados !== null) ultimosChamados = dados.ultimosChamados;
+        if (dados && typeof dados.statusDia === 'object' && dados.statusDia !== null) statusDia = dados.statusDia;
+        if (dados && typeof dados.atendimentosPorOperador === 'object' && dados.atendimentosPorOperador !== null) atendimentosPorOperador = dados.atendimentosPorOperador;
+        if (dados && Array.isArray(dados.historicoAtendimentos)) historicoAtendimentos = dados.historicoAtendimentos;
 
+        reconstruirContagens();
         console.log('✅ Dados carregados de dados.json');
     } catch (err) {
-        console.error('❌ Erro ao carregar dados.json:', err);
+        if (err.code !== 'ENOENT') {
+            console.error('❌ Erro ao carregar dados.json:', err);
+        }
     }
+}
+
+function reconstruirContagens() {
+    atendimentosPorOperador = {};
+    historicoAtendimentos.forEach(item => {
+        if (item.resultado === 'atendido' && item.atendente) {
+            atendimentosPorOperador[item.atendente] = (atendimentosPorOperador[item.atendente] || 0) + 1;
+        }
+    });
+}
+
+function calcularMediaPorSetor() {
+    const hoje = getDataString();
+    const setores = { REGULACAO: [], COMPLEXIDADE: [], AUTORIZACAO: [] };
+
+    historicoAtendimentos.forEach(item => {
+        if (item.resultado !== 'atendido') return;
+        if (!item.horaAtendimento) return;
+        const dataAtendimento = item.horaAtendimento.slice(0, 10);
+        if (dataAtendimento !== hoje) return;
+
+        if (item.setor === 'Regulação') setores.REGULACAO.push(item.tempoEspera);
+        if (item.setor === 'Complexidade') setores.COMPLEXIDADE.push(item.tempoEspera);
+        if (item.setor === 'Autorização') setores.AUTORIZACAO.push(item.tempoEspera);
+    });
+
+    return {
+        REGULACAO: setores.REGULACAO.length ? Math.round(setores.REGULACAO.reduce((a,b) => a+b,0) / setores.REGULACAO.length) : 0,
+        COMPLEXIDADE: setores.COMPLEXIDADE.length ? Math.round(setores.COMPLEXIDADE.reduce((a,b) => a+b,0) / setores.COMPLEXIDADE.length) : 0,
+        AUTORIZACAO: setores.AUTORIZACAO.length ? Math.round(setores.AUTORIZACAO.reduce((a,b) => a+b,0) / setores.AUTORIZACAO.length) : 0,
+        totalAtendidosHoje: setores.REGULACAO.length + setores.COMPLEXIDADE.length + setores.AUTORIZACAO.length
+    };
 }
 
 function emitirEstadoCompleto() {
     io.emit('estado_servidor', obterEstadoAtual());
+    io.emit('atualizar_media_setores', calcularMediaPorSetor());
 }
 
 const mapeamentoSetores = {
@@ -77,12 +154,13 @@ function realizarResetGeral() {
     clearTimeout(timerSegurancaTV);
     filaPacientes = []; filaDeEsperaTV = []; tvFalando = false; 
     contadores = { 'RP': 1, 'R': 1, 'CP': 1, 'C': 1, 'AT': 1 };
-    turnos = { 'REGULACAO': 'P', 'COMPLEXIDADE': 'P' };
+    turnos = { 'REGULACAO': 'P', 'COMPLEXIDADE': 'P', 'AUTORIZACAO': 'P' };
     ultimosChamados = {
         'Regulação': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
         'Complexidade': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
         'Autorização': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ]
     };
+    statusDia = { aberto: true, data: getDataString() };
     io.emit('atualizar_fila', filaPacientes);
     io.emit('atualizar_painel_setores', ultimosChamados);
     enviarQuantitativosFila();
@@ -109,7 +187,6 @@ function agendarResetMeiaNoite() {
         setInterval(realizarResetGeral, 24 * 60 * 60 * 1000);
     }, tempoAteMeiaNoite);
 }
-agendarResetMeiaNoite(); // Ativa o agendamento ao ligar o servidor
 
 // 🌟 SISTEMA ANTI-COCHILO (PING AUTOMÁTICO A CADA 10 MINUTOS)
 // Substitua o link abaixo pelo link VERDE real que o Render te deu!
@@ -200,7 +277,9 @@ io.on('connection', (socket) => {
             nome: dados.nome ? dados.nome.trim() : '',
             setor: mapeamentoSetores[dados.filaOpcao] || 'Regulação',
             fila: dados.filaOpcao,
-            status: 'LOBBY'
+            status: 'LOBBY',
+            horarioEmissao: new Date().toISOString(),
+            horarioAtendimento: null
         };
 
         filaPacientes.push(novaFicha);
@@ -229,6 +308,7 @@ io.on('connection', (socket) => {
         }
 
         if (pacienteEscolhido) {
+            pacienteEscolhido.horarioAtendimento = new Date().toISOString();
             ultimosChamados[nomeSetorReal].unshift({ ficha: pacienteEscolhido.ficha, nome: pacienteEscolhido.nome });
             if (ultimosChamados[nomeSetorReal].length > 2) ultimosChamados[nomeSetorReal].pop();
 
@@ -252,11 +332,38 @@ io.on('connection', (socket) => {
     });
 
     socket.on('registrar_conclusao_atendimento', (dados) => {
-        const { setor, resultado, siglaFicha } = dados;
+        const { setor, resultado, idFicha, operador } = dados;
+        const atendente = operador || 'Desconhecido';
+        const paciente = filaPacientes.find(p => p.id === idFicha || p.ficha === dados.siglaFicha);
 
-        if (resultado === 'falta' && setor !== 'AUTORIZACAO') {
-            const isPriority = siglaFicha.endsWith('P');
-            turnos[setor] = isPriority ? 'P' : 'N';
+        if (paciente) {
+            const horaChegada = paciente.horarioEmissao || new Date(Number(paciente.id)).toISOString();
+            const horaAtendimento = paciente.horarioAtendimento || new Date().toISOString();
+            const tempoEspera = Math.max(0, Math.round((new Date(horaAtendimento) - new Date(horaChegada)) / 60000));
+
+            historicoAtendimentos.push({
+                id: paciente.id,
+                ficha: paciente.ficha,
+                setor: paciente.setor,
+                horaChegada,
+                horaAtendimento,
+                atendente,
+                tempoEspera,
+                resultado,
+                data: horaAtendimento.slice(0, 10)
+            });
+
+            paciente.status = 'CONCLUIDO';
+
+            if (resultado === 'atendido') {
+                atendimentosPorOperador[atendente] = (atendimentosPorOperador[atendente] || 0) + 1;
+            }
+
+            if (resultado === 'falta' && setor !== 'AUTORIZACAO') {
+                const isPriority = paciente.fila.endsWith('P');
+                turnos[setor] = isPriority ? 'P' : 'N';
+            }
+
             emitirEstadoCompleto();
             salvarDados();
         }
@@ -282,7 +389,12 @@ io.on('connection', (socket) => {
     });
 });
 
-carregarDados();
+async function iniciarServidor() {
+    await carregarDados();
+    agendarResetMeiaNoite();
+    const PORT = process.env.PORT || 3000;
+    server.listen(PORT, () => console.log(`🚀 Motor rodando na porta ${PORT}`));
+}
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🚀 Motor rodando na porta ${PORT}`));
+iniciarServidor();
+
