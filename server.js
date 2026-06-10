@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const https = require('https');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -23,6 +24,7 @@ let filaDeEsperaTV = [];
 let tvFalando = false;   
 let timerSegurancaTV = null; 
 let estadoSolicitado = false;
+let timerSolicitacaoEstado = null;
 
 function obterEstadoAtual() {
     return {
@@ -72,11 +74,27 @@ function restaurarEstadoDoCliente(dados) {
     turnos = dados.turnos || turnos;
     ultimosChamados = dados.ultimosChamados || ultimosChamados;
     estadoSolicitado = false;
-    console.log('✅ Estado restaurado pelo cliente via localStorage');
+    clearTimeout(timerSolicitacaoEstado);
+    console.log('✅ Estado restaurado pelo cliente via localStorage - Fichas:', filaPacientes.length);
     io.emit('atualizar_fila', filaPacientes);
     io.emit('atualizar_painel_setores', ultimosChamados);
     enviarQuantitativosFila();
     emitirEstadoCompleto();
+}
+
+function solicitarEstadoComRetry() {
+    if (estadoSolicitado) return;
+    estadoSolicitado = true;
+    console.log('🔄 Solicitando estado dos clientes...');
+    io.emit('solicitar_estado_cliente');
+    
+    timerSolicitacaoEstado = setTimeout(() => {
+        if (estadoEstaVazio()) {
+            console.log('⏱️ Timeout: nenhum cliente respondeu, tentando novamente em 2s...');
+            estadoSolicitado = false;
+            setTimeout(() => solicitarEstadoComRetry(), 2000);
+        }
+    }, 3000);
 }
 
 const mapeamentoSetores = {
@@ -128,7 +146,7 @@ agendarResetMeiaNoite(); // Ativa o agendamento ao ligar o servidor
 const URL_DO_SEU_SISTEMA = "https://painel-da-regulacao.onrender.com"; 
 
 setInterval(() => {
-    http.get(URL_DO_SEU_SISTEMA, (res) => {
+    https.get(URL_DO_SEU_SISTEMA, (res) => {
         console.log("🔄 Ping enviado para manter o servidor acordado.");
     }).on('error', (err) => {
         console.log("❌ Erro no ping anti-cochilo:", err.message);
@@ -202,8 +220,7 @@ io.on('connection', (socket) => {
     socket.emit('estado_servidor', obterEstadoAtual());
 
     if (estadoEstaVazio() && !estadoSolicitado) {
-        estadoSolicitado = true;
-        io.emit('solicitar_estado_cliente');
+        solicitarEstadoComRetry();
     }
     
     socket.on('resposta_estado_cliente', (dados) => {
@@ -303,4 +320,3 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`🚀 Motor rodando na porta ${PORT}`));
-
