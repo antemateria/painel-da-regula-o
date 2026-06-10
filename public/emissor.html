@@ -33,40 +33,6 @@
             margin-bottom: 15px;
             box-sizing: border-box;
         }
-        .info-fixa {
-            position: sticky;
-            top: 0;
-            width: 100%;
-            max-width: 650px;
-            margin: 0 auto 20px auto;
-            background: white;
-            border: 1px solid #d1d5db;
-            border-radius: 12px;
-            padding: 15px 20px;
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.06);
-            z-index: 5;
-        }
-        .info-bloco {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-        .info-bloco span:first-child {
-            color: #6b7280;
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .info-bloco span:last-child {
-            color: #111827;
-            font-size: 16px;
-            font-weight: 900;
-        }
-
         .cabecalho-textos h1 { margin: 0; font-size: 22px; font-weight: 900; text-transform: uppercase; }
         .cabecalho-textos p { margin: 5px 0 0 0; font-size: 14px; font-weight: 600; color: #9ca3af; }
 
@@ -124,17 +90,6 @@
             <p>Recepção</p>
         </div>
         <button class="btn-sair" onclick="window.location.href='index.html'">SAIR</button>
-    </div>
-
-    <div class="info-fixa" id="info-fixa">
-        <div class="info-bloco">
-            <span>Última ficha emitida</span>
-            <span id="fixa-ult-emit">--</span>
-        </div>
-        <div class="info-bloco">
-            <span>Última chamada na TV</span>
-            <span id="fixa-ult-tv">--</span>
-        </div>
     </div>
 
     <div class="container-botoes">
