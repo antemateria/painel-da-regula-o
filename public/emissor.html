@@ -20,7 +20,6 @@
             -webkit-user-select: none; 
         }
 
-        /* Cabeçalho na cor escura igual ao da Porta */
         .cabecalho {
             background-color: #1f2937;
             color: white;
@@ -30,41 +29,8 @@
             align-items: center;
             padding: 15px 30px;
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-            margin-bottom: 15px;
+            margin-bottom: 25px;
             box-sizing: border-box;
-        }
-        .info-fixa {
-            position: sticky;
-            top: 0;
-            width: 100%;
-            max-width: 650px;
-            margin: 0 auto 20px auto;
-            background: white;
-            border: 1px solid #d1d5db;
-            border-radius: 12px;
-            padding: 15px 20px;
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.06);
-            z-index: 5;
-        }
-        .info-bloco {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-        .info-bloco span:first-child {
-            color: #6b7280;
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .info-bloco span:last-child {
-            color: #111827;
-            font-size: 16px;
-            font-weight: 900;
         }
 
         .cabecalho-textos h1 { margin: 0; font-size: 22px; font-weight: 900; text-transform: uppercase; }
@@ -80,7 +46,6 @@
         
         .bloco-setor { background: white; padding: 20px 15px; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 2px solid #e5e7eb; }
 
-        /* Título do setor e Total Aguardando */
         .titulo-setor {
             font-size: 20px; font-weight: 900; color: #374151; text-transform: uppercase; text-align: center; margin: 0 0 15px 0; border-bottom: 2px solid #f3f4f6; padding-bottom: 10px;
         }
@@ -99,12 +64,10 @@
         .btn-totem:active { transform: scale(0.96); }
         .btn-totem span { font-size: 14px; font-weight: 600; opacity: 0.9; text-align: center; letter-spacing: 0.5px; }
 
-        /* Cores solicitadas */
-        .btn-prioridade { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-bottom: 5px solid #991b1b; } /* Vermelho */
-        .btn-normal { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-bottom: 5px solid #1d4ed8; } /* Azul */
-        .btn-unica { background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-bottom: 5px solid #047857; } /* Verde */
+        .btn-prioridade { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-bottom: 5px solid #991b1b; } 
+        .btn-normal { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-bottom: 5px solid #1d4ed8; } 
+        .btn-unica { background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-bottom: 5px solid #047857; } 
 
-        /* Rastreador de informações */
         .info-fila {
             background-color: #f9fafb; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; font-size: 13px; font-weight: 600; color: #4b5563; display: flex; flex-direction: column; gap: 5px;
         }
@@ -112,8 +75,8 @@
         .linha-info:last-child { border-bottom: none; padding-bottom: 0; }
         
         .valor-destaque { font-weight: 900; font-size: 14px; color: #111827; }
-        .valor-proxima { color: #2563eb; } /* Destaque para a próxima */
-        .valor-tv { color: #d97706; } /* Destaque para a TV */
+        .valor-proxima { color: #2563eb; } 
+        .valor-tv { color: #d97706; } 
     </style>
 </head>
 <body>
@@ -124,17 +87,6 @@
             <p>Recepção</p>
         </div>
         <button class="btn-sair" onclick="window.location.href='index.html'">SAIR</button>
-    </div>
-
-    <div class="info-fixa" id="info-fixa">
-        <div class="info-bloco">
-            <span>Última ficha emitida</span>
-            <span id="fixa-ult-emit">--</span>
-        </div>
-        <div class="info-bloco">
-            <span>Última chamada na TV</span>
-            <span id="fixa-ult-tv">--</span>
-        </div>
     </div>
 
     <div class="container-botoes">
@@ -217,7 +169,6 @@
         const socket = io();
         let bloqueado = false; 
         
-        // Memórias locais para rastrear os números sem depender do servidor enviar tudo
         let maxNumeros = { 'RP': 0, 'R': 0, 'CP': 0, 'C': 0, 'AT': 0 };
         let ultimasEmitidas = { 'RP': '--', 'R': '--', 'CP': '--', 'C': '--', 'AT': '--' };
         let ultimasTV = { 'RP': '--', 'R': '--', 'CP': '--', 'C': '--', 'AT': '--' };
@@ -259,74 +210,70 @@
         }
 
         socket.on('estado_servidor', (estado) => {
-            if (estadoLocalSalvavel(estado)) {
-                salvarEstadoLocal(estado);
-            }
+            try {
+                if (estadoLocalSalvavel(estado)) {
+                    salvarEstadoLocal(estado);
+                }
 
-            if (estado && estado.contadores) {
-                Object.keys(estado.contadores).forEach(key => {
-                    maxNumeros[key] = estado.contadores[key] - 1;
-                    const proxima = (estado.contadores[key]).toString().padStart(2, '0');
-                    const proxId = `prox-emit-${key}`;
-                    const proxEl = document.getElementById(proxId);
-                    if (proxEl) proxEl.innerText = `${key} ${proxima}`;
-                });
-            }
+                if (estado && estado.contadores) {
+                    Object.keys(estado.contadores).forEach(key => {
+                        maxNumeros[key] = estado.contadores[key] - 1;
+                        const proxima = (estado.contadores[key]).toString().padStart(2, '0');
+                        const proxId = `prox-emit-${key}`;
+                        const proxEl = document.getElementById(proxId);
+                        if (proxEl) proxEl.innerText = `${key} ${proxima}`;
+                    });
+                }
 
-            if (estado && estado.ultimosChamados) {
-                ['RP','R','CP','C','AT'].forEach(sigla => {
-                    const setor = sigla === 'AT' ? 'Autorização' : (sigla === 'RP' || sigla === 'R' ? 'Regulação' : 'Complexidade');
-                    const chamado = estado.ultimosChamados[setor] && estado.ultimosChamados[setor][0] ? estado.ultimosChamados[setor][0].ficha : '--';
-                    const id = `ult-tv-${sigla}`;
-                    const el = document.getElementById(id);
-                    if (el) el.innerText = chamado;
-                });
-                const ultimaGeral = ['Regulação','Complexidade','Autorização']
-                    .map(setor => estado.ultimosChamados[setor] && estado.ultimosChamados[setor][0] ? `${estado.ultimosChamados[setor][0].ficha} (${setor})` : null)
-                    .filter(Boolean).shift() || '--';
-                document.getElementById('fixa-ult-tv').innerText = ultimaGeral;
+                if (estado && estado.ultimosChamados) {
+                    ['RP','R','CP','C','AT'].forEach(sigla => {
+                        const setor = sigla === 'AT' ? 'Autorização' : (sigla === 'RP' || sigla === 'R' ? 'Regulação' : 'Complexidade');
+                        const chamado = estado.ultimosChamados[setor] && estado.ultimosChamados[setor][0] ? estado.ultimosChamados[setor][0].ficha : '--';
+                        const id = `ult-tv-${sigla}`;
+                        const el = document.getElementById(id);
+                        if (el) el.innerText = chamado;
+                    });
+                }
+            } catch (err) {
+                console.error("Erro na leitura do estado do servidor", err);
             }
-
-            const ultimaEmitida = Object.values(ultimasEmitidas).filter(v => v !== '--').pop() || '--';
-            document.getElementById('fixa-ult-emit').innerText = ultimaEmitida;
         });
 
         socket.on('solicitar_estado_cliente', () => {
             const estado = obterEstadoLocal();
             if (estado) {
-                console.log('📤 Enviando estado para servidor');
                 socket.emit('resposta_estado_cliente', estado);
             }
         });
 
         socket.on('reconnect', () => {
-            console.log('🔗 Reconectado ao servidor');
             const estado = obterEstadoLocal();
             if (estado) {
                 socket.emit('resposta_estado_cliente', estado);
             }
         });
 
-        function atualizarInfoFixa() {
-            const ultimaEmitida = Object.values(ultimasEmitidas).filter(v => v !== '--').pop() || '--';
-            document.getElementById('fixa-ult-emit').innerText = ultimaEmitida;
-        }
-
         function emitirSenha(siglaFila) {
             if (bloqueado) return;
             bloqueado = true;
 
-            socket.emit('adicionar_ficha', { 
-                filaOpcao: siglaFila, 
-                nome: '' 
-            });
+            try {
+                socket.emit('adicionar_ficha', { 
+                    filaOpcao: siglaFila, 
+                    nome: '' 
+                });
 
-            // Registra localmente que esta foi a última que você clicou para emitir
-            const proximoNumFormatado = (maxNumeros[siglaFila] + 1).toString().padStart(2, '0');
-            ultimasEmitidas[siglaFila] = `${siglaFila} ${proximoNumFormatado}`;
-
-            // Trava de 0.5s para evitar duplo clique e geração de duas senhas sem querer
-            setTimeout(() => { bloqueado = false; }, 500);
+                const contadorAtual = maxNumeros[siglaFila] || 0;
+                const proximoNumFormatado = (contadorAtual + 1).toString().padStart(2, '0');
+                ultimasEmitidas[siglaFila] = `${siglaFila} ${proximoNumFormatado}`;
+                
+            } catch (err) {
+                console.error("Erro ao tentar emitir ficha:", err);
+            } finally {
+                setTimeout(() => { 
+                    bloqueado = false; 
+                }, 500);
+            }
         }
 
         function confirmarReset() {
@@ -335,16 +282,18 @@
             }
         }
 
-        // Rastreando a TV em tempo real
         socket.on('tocar_chamada_tv', (dados) => {
-            const sigla = dados.ficha.split(' ')[0]; // Pega só o prefixo (Ex: RP)
-            if (ultimasTV[sigla] !== undefined) {
-                ultimasTV[sigla] = dados.ficha;
-                document.getElementById(`ult-tv-${sigla}`).innerText = dados.ficha;
+            try {
+                const sigla = dados.ficha.split(' ')[0]; 
+                if (ultimasTV[sigla] !== undefined) {
+                    ultimasTV[sigla] = dados.ficha;
+                    document.getElementById(`ult-tv-${sigla}`).innerText = dados.ficha;
+                }
+            } catch (e) {
+                console.error("Erro ao atualizar TV:", e);
             }
         });
 
-        // Limpando rastreadores caso o sistema seja resetado
         socket.on('sistema_resetado', () => {
             maxNumeros = { 'RP': 0, 'R': 0, 'CP': 0, 'C': 0, 'AT': 0 };
             ultimasEmitidas = { 'RP': '--', 'R': '--', 'CP': '--', 'C': '--', 'AT': '--' };
@@ -358,41 +307,42 @@
             alert("Sistema reiniciado com sucesso!");
         });
 
-        // Ouvindo a fila para atualizar os totais e adivinhar a próxima
         socket.on('atualizar_fila', (filaGlobal) => {
-            let totalReg = 0, totalComp = 0, totalAut = 0;
-            const tiposDeFila = ['RP', 'R', 'CP', 'C', 'AT'];
-            
-            // 1. Calcula o total de pacientes aguardando por setor
-            filaGlobal.forEach(p => {
-                if (p.status === 'LOBBY') {
-                    if (p.fila === 'RP' || p.fila === 'R') totalReg++;
-                    else if (p.fila === 'CP' || p.fila === 'C') totalComp++;
-                    else if (p.fila === 'AT') totalAut++;
-                }
-
-                // Verifica o maior número já gerado no sistema para não perder a conta
-                const numFicha = parseInt(p.ficha.split(' ')[1], 10);
-                if (numFicha > maxNumeros[p.fila]) {
-                    maxNumeros[p.fila] = numFicha;
-                }
-            });
-
-            // 2. Atualiza os visores de Total na tela
-            document.getElementById('total-REG').innerText = totalReg;
-            document.getElementById('total-COMP').innerText = totalComp;
-            document.getElementById('total-AUT').innerText = totalAut;
-
-            // 3. Atualiza os rastreadores de emissão debaixo de cada botão
-            tiposDeFila.forEach(sigla => {
-                // Se alguém deletar a ficha, não queremos que o contador volte para trás.
-                // O próximo número é sempre o maior número já visto + 1.
-                const proxNum = maxNumeros[sigla] + 1;
-                const proxFormatado = `${sigla} ${proxNum.toString().padStart(2, '0')}`;
+            try {
+                let totalReg = 0, totalComp = 0, totalAut = 0;
+                const tiposDeFila = ['RP', 'R', 'CP', 'C', 'AT'];
                 
-                document.getElementById(`prox-emit-${sigla}`).innerText = proxFormatado;
-                document.getElementById(`ult-emit-${sigla}`).innerText = ultimasEmitidas[sigla];
-            });
+                filaGlobal.forEach(p => {
+                    if (p.status === 'LOBBY') {
+                        if (p.fila === 'RP' || p.fila === 'R') totalReg++;
+                        else if (p.fila === 'CP' || p.fila === 'C') totalComp++;
+                        else if (p.fila === 'AT') totalAut++;
+                    }
+
+                    const splitFicha = p.ficha ? p.ficha.split(' ') : [];
+                    if (splitFicha.length > 1) {
+                        const numFicha = parseInt(splitFicha[1], 10);
+                        if (!isNaN(numFicha) && numFicha > (maxNumeros[p.fila] || 0)) {
+                            maxNumeros[p.fila] = numFicha;
+                        }
+                    }
+                });
+
+                document.getElementById('total-REG').innerText = totalReg;
+                document.getElementById('total-COMP').innerText = totalComp;
+                document.getElementById('total-AUT').innerText = totalAut;
+
+                tiposDeFila.forEach(sigla => {
+                    const contadorAtual = maxNumeros[sigla] || 0;
+                    const proxNum = contadorAtual + 1;
+                    const proxFormatado = `${sigla} ${proxNum.toString().padStart(2, '0')}`;
+                    
+                    document.getElementById(`prox-emit-${sigla}`).innerText = proxFormatado;
+                    document.getElementById(`ult-emit-${sigla}`).innerText = ultimasEmitidas[sigla] || '--';
+                });
+            } catch (e) {
+                console.error("Erro interno ao atualizar contadores da fila:", e);
+            }
         });
     </script>
 </body>
