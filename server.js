@@ -28,6 +28,14 @@ let timerSegurancaTV = null;
 
 const dadosPath = path.join(__dirname, 'dados.json');
 const fsPromises = fs.promises;
+const DEBUG_LOG = path.join(__dirname, 'public', 'debug-38e5fb.log');
+// #region agent log
+function dbgLog(location, message, data, hypothesisId) {
+    try {
+        fs.appendFileSync(DEBUG_LOG, JSON.stringify({ sessionId: '38e5fb', location, message, data, hypothesisId, timestamp: Date.now(), runId: 'pre-fix' }) + '\n');
+    } catch (e) { /* ignore */ }
+}
+// #endregion
 
 function getDataString() {
     return new Date().toISOString().slice(0, 10);
@@ -99,17 +107,26 @@ async function carregarDados() {
 
         reconstruirContagens();
         console.log('✅ Dados carregados de dados.json');
+        // #region agent log
+        dbgLog('server.js:carregarDados', 'dados carregados ok', { filaLen: filaPacientes.length, contadores }, 'A');
+        // #endregion
     } catch (err) {
         if (err.code !== 'ENOENT') {
             console.error('❌ Erro ao carregar dados.json:', err);
         }
+        // #region agent log
+        dbgLog('server.js:carregarDados', 'falha ao carregar dados', { errCode: err.code, errMsg: err.message }, 'A');
+        // #endregion
     }
 }
 
 function reconstruirContagens() {
     atendimentosPorOperador = {};
+    const hoje = getDataString(); // Pega a data atual (AAAA-MM-DD)
+    
     historicoAtendimentos.forEach(item => {
-        if (item.resultado === 'atendido' && item.atendente) {
+        // Só conta no painel se foi atendido HOJE
+        if (item.resultado === 'atendido' && item.atendente && item.data === hoje) {
             atendimentosPorOperador[item.atendente] = (atendimentosPorOperador[item.atendente] || 0) + 1;
         }
     });
@@ -149,27 +166,40 @@ const mapeamentoSetores = {
     'AT': 'Autorização'
 };
 
-// 🌟 FUNÇÃO DE RESET COMPLETO (USADA NO BOTÃO E NO TIMER DA MEIA-NOITE)
+// 🌟 FUNÇÃO DE RESET COMPLETO (PRESERVA O HISTÓRICO MORTO)
 function realizarResetGeral() {
     clearTimeout(timerSegurancaTV);
-    filaPacientes = []; filaDeEsperaTV = []; tvFalando = false; 
+    
+    // Limpa apenas as filas operacionais do dia
+    filaPacientes = []; 
+    filaDeEsperaTV = []; 
+    tvFalando = false; 
+    
+    // Reseta as senhas para voltarem a emitir a partir do 01 de manhã
     contadores = { 'RP': 1, 'R': 1, 'CP': 1, 'C': 1, 'AT': 1 };
     turnos = { 'REGULACAO': 'P', 'COMPLEXIDADE': 'P', 'AUTORIZACAO': 'P' };
+    
     ultimosChamados = {
         'Regulação': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
         'Complexidade': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
         'Autorização': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ]
     };
+    
     statusDia = { aberto: true, data: getDataString() };
+    
+    // Avisa todas as telas que o dia virou
     io.emit('atualizar_fila', filaPacientes);
     io.emit('atualizar_painel_setores', ultimosChamados);
     enviarQuantitativosFila();
     io.emit('liberar_botoes_tv_livre');
     io.emit('limpar_tv'); 
+    
+    // Força os painéis dos reguladores a pedirem a contagem nova (que vai dar 0 por causa da nova data)
     io.emit('sistema_resetado');
+    
     emitirEstadoCompleto();
-    salvarDados();
-    console.log("⏰ Sistema resetado automaticamente!");
+    salvarDados(); // Salva no dados.json mantendo o historicoAtendimentos guardado!
+    console.log(`⏰ Mudança de turno concluída! Novo dia iniciado: ${statusDia.data}`);
 }
 
 // 🌟 TIMER AUTOMÁTICO PARA A MEIA-NOITE
@@ -189,7 +219,6 @@ function agendarResetMeiaNoite() {
 }
 
 // 🌟 SISTEMA ANTI-COCHILO (PING AUTOMÁTICO A CADA 10 MINUTOS)
-// Substitua o link abaixo pelo link VERDE real que o Render te deu!
 const URL_DO_SEU_SISTEMA = "https://painel-da-regulacao.onrender.com"; 
 
 setInterval(() => {
@@ -221,10 +250,17 @@ function enfileirarChamadaTV(pacoteDeChamada) {
 function executarDisparoTV(pacoteDeChamada) {
     tvFalando = true;
     io.emit('bloqueio_tv_ocupada', pacoteDeChamada);
-    io.emit('tocar_chamada_tv', { ficha: pacoteDeChamada.ficha });
+    // Envia pacote completo (ficha, nome, guiche) para a TV
+    io.emit('tocar_chamada_tv', pacoteDeChamada);
+    // #region agent log
+    dbgLog('server.js:executarDisparoTV', 'tv disparo iniciado', { ficha: pacoteDeChamada.ficha, filaEsperaLen: filaDeEsperaTV.length }, 'C');
+    // #endregion
 
     clearTimeout(timerSegurancaTV);
     timerSegurancaTV = setTimeout(() => {
+        // #region agent log
+        dbgLog('server.js:timerSegurancaTV', 'timer 7s expirou liberando tv', { ficha: pacoteDeChamada.ficha }, 'C');
+        // #endregion
         liberarServidorEProximo();
     }, 7000);
 }
@@ -236,6 +272,9 @@ function liberarServidorEProximo() {
     } else {
         tvFalando = false;
         io.emit('liberar_botoes_tv_livre');
+        // #region agent log
+        dbgLog('server.js:liberarServidorEProximo', 'tv liberada', {}, 'C');
+        // #endregion
     }
 }
 
@@ -267,6 +306,21 @@ io.on('connection', (socket) => {
     socket.emit('estado_servidor', obterEstadoAtual());
     socket.emit('atualizar_media_setores', calcularMediaPorSetor());
 
+    // DEVOLVE A PRODUÇÃO DIÁRIA PARA A TELA DO OPERADOR
+    socket.on('pedir_minha_producao', (nomeOperador) => {
+        const dataHoje = getDataString(); // Consistência com a formatação AAAA-MM-DD
+        
+        // Filtra no histórico APENAS as fichas de hoje, deste operador, que foram 'atendidas'
+        const meusAtendimentos = historicoAtendimentos.filter(ficha => 
+            ficha.atendente === nomeOperador && 
+            ficha.data === dataHoje && 
+            ficha.resultado === 'atendido'
+        );
+
+        // Manda a quantidade de volta para a tela do operador
+        socket.emit('receber_minha_producao', meusAtendimentos.length);
+    });
+
     socket.on('adicionar_ficha', (dados) => {
         const numero = contadores[dados.filaOpcao].toString().padStart(2, '0');
         const codigoFicha = `${dados.filaOpcao} ${numero}`;
@@ -291,32 +345,43 @@ io.on('connection', (socket) => {
     });
 
     socket.on('chamar_para_atendimento', (setorDoPainel) => {
-        if (tvFalando) return; 
+        if (tvFalando) {
+            // #region agent log
+            dbgLog('server.js:chamar_para_atendimento', 'bloqueado tvFalando', { setorDoPainel }, 'D');
+            // #endregion
+            return;
+        }
+        // aceitar tanto string (antigo) quanto objeto { setor, guiche }
+        let setor = setorDoPainel;
+        let guiche = null;
+        if (typeof setorDoPainel === 'object' && setorDoPainel !== null) {
+            setor = setorDoPainel.setor;
+            guiche = setorDoPainel.guiche || null;
+        }
 
-        const nomeSetorReal = (setorDoPainel === 'REGULACAO') ? 'Regulação' : (setorDoPainel === 'COMPLEXIDADE') ? 'Complexidade' : 'Autorização';
-        const prefixo = (setorDoPainel === 'REGULACAO') ? 'R' : (setorDoPainel === 'COMPLEXIDADE') ? 'C' : 'AT';
+        const nomeSetorReal = (setor === 'REGULACAO') ? 'Regulação' : (setor === 'COMPLEXIDADE') ? 'Complexidade' : 'Autorização';
+        const prefixo = (setor === 'REGULACAO') ? 'R' : (setor === 'COMPLEXIDADE') ? 'C' : 'AT';
         
         let pacienteEscolhido;
         
-        if (setorDoPainel === 'AUTORIZACAO') {
+        if (setor === 'AUTORIZACAO') {
             let idx = filaPacientes.findIndex(p => p.setor === 'Autorização' && p.status === 'LOBBY');
             if (idx !== -1) {
                 pacienteEscolhido = filaPacientes[idx];
                 pacienteEscolhido.status = 'SALA';
             }
         } else {
-            pacienteEscolhido = extrairFichaComRegra(setorDoPainel, prefixo);
+            pacienteEscolhido = extrairFichaComRegra(setor, prefixo);
         }
 
         if (pacienteEscolhido) {
             pacienteEscolhido.horarioAtendimento = new Date().toISOString();
             ultimosChamados[nomeSetorReal].unshift({ ficha: pacienteEscolhido.ficha, nome: pacienteEscolhido.nome });
             if (ultimosChamados[nomeSetorReal].length > 2) ultimosChamados[nomeSetorReal].pop();
-
-            const pacoteDeChamada = { ficha: pacienteEscolhido.ficha, nome: pacienteEscolhido.nome };
+            const pacoteDeChamada = { ficha: pacienteEscolhido.ficha, nome: pacienteEscolhido.nome, guiche };
             enfileirarChamadaTV(pacoteDeChamada);
 
-            socket.emit('paciente_enviado_para_mesa', { paciente: pacienteEscolhido });
+            socket.emit('paciente_enviado_para_mesa', { paciente: pacienteEscolhido, guiche });
             io.emit('atualizar_painel_setores', ultimosChamados);
             io.emit('atualizar_fila', filaPacientes);
             enviarQuantitativosFila();
@@ -326,22 +391,29 @@ io.on('connection', (socket) => {
             socket.emit('erro_sem_paciente_na_sala', 'Não há pacientes aguardando para o seu setor.');
         }
     });
-
-    socket.on('rechamar_paciente_tv', (pacienteRechamado) => {
-        const pacoteDeChamada = { ficha: pacienteRechamado.ficha, nome: pacienteRechamado.nome };
+socket.on('rechamar_paciente_tv', (pacienteRechamado) => {
+        const pacoteDeChamada = { 
+            ficha: pacienteRechamado.ficha, 
+            nome: pacienteRechamado.nome,
+            guiche: pacienteRechamado.guiche // Agora o servidor repassa a informação do guichê!
+        };
         enfileirarChamadaTV(pacoteDeChamada);
     });
 
     socket.on('registrar_conclusao_atendimento', (dados) => {
         const { setor, resultado, idFicha, operador } = dados;
         const atendente = operador || 'Desconhecido';
-        const paciente = filaPacientes.find(p => p.id === idFicha || p.ficha === dados.siglaFicha);
+        
+        // Procura o paciente na fila ativa
+        const idx = filaPacientes.findIndex(p => p.id === idFicha || p.ficha === dados.siglaFicha);
 
-        if (paciente) {
+        if (idx !== -1) {
+            const paciente = filaPacientes[idx];
             const horaChegada = paciente.horarioEmissao || new Date(Number(paciente.id)).toISOString();
             const horaAtendimento = paciente.horarioAtendimento || new Date().toISOString();
             const tempoEspera = Math.max(0, Math.round((new Date(horaAtendimento) - new Date(horaChegada)) / 60000));
 
+            // Grava no Array do Arquivo Morto
             historicoAtendimentos.push({
                 id: paciente.id,
                 ficha: paciente.ficha,
@@ -351,11 +423,13 @@ io.on('connection', (socket) => {
                 atendente,
                 tempoEspera,
                 resultado,
-                data: horaAtendimento.slice(0, 10)
+                data: getDataString() // Salva no formato AAAA-MM-DD estável
             });
 
-            paciente.status = 'CONCLUIDO';
+            // Remove o paciente da fila ativa de memória para o painel não ficar pesado
+            filaPacientes.splice(idx, 1);
 
+            // Atualiza a contagem rápida de hoje na RAM
             if (resultado === 'atendido') {
                 atendimentosPorOperador[atendente] = (atendimentosPorOperador[atendente] || 0) + 1;
             }
@@ -365,6 +439,8 @@ io.on('connection', (socket) => {
                 turnos[setor] = isPriority ? 'P' : 'N';
             }
 
+            io.emit('atualizar_fila', filaPacientes);
+            enviarQuantitativosFila();
             emitirEstadoCompleto();
             salvarDados();
         }
@@ -373,8 +449,17 @@ io.on('connection', (socket) => {
     });
 
     socket.on('tv_terminou_de_falar', () => {
+        // #region agent log
+        dbgLog('server.js:tv_terminou_de_falar', 'evento recebido da tv', {}, 'C');
+        // #endregion
         clearTimeout(timerSegurancaTV); 
         liberarServidorEProximo();
+    });
+
+    socket.on('resposta_estado_cliente', (estado) => {
+        // #region agent log
+        dbgLog('server.js:resposta_estado_cliente', 'cliente enviou estado mas servidor nao restaura', { filaLen: estado && estado.filaPacientes ? estado.filaPacientes.length : null }, 'E');
+        // #endregion
     });
 
     socket.on('excluir_ficha', (idFicha) => {
