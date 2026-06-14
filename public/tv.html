@@ -141,7 +141,7 @@
         }
         document.body.addEventListener('click', activarAudio);
 
-        function falar(fichaStr) {
+        function falar(fichaStr, guiche) {
             window.speechSynthesis.cancel(); 
             const partes = fichaStr.split(' ');
             const siglaFicha = partes[0] || 'R';
@@ -150,17 +150,23 @@
             let texto = '';
 
             if (siglaFicha === 'AT') {
-                texto = `Atenção, senha autorização ${numero}, dirija-se à sala da regulação.`;
+                texto = `Atenção, senha autorização ${numero}, dirija-se à sala da regulação`;
             } else if (siglaFicha === 'RP') {
-                texto = `Atenção, senha regulação prioridade ${numero}, dirija-se à sala da regulação.`;
+                texto = `Atenção, senha regulação prioridade ${numero}, dirija-se à sala da regulação`;
             } else if (siglaFicha === 'R') {
-                texto = `Atenção, senha regulação normal ${numero}, dirija-se à sala da regulação.`;
+                texto = `Atenção, senha regulação normal ${numero}, dirija-se à sala da regulação`;
             } else if (siglaFicha === 'CP') {
-                texto = `Atenção, senha complexidade prioridade ${numero}, dirija-se à sala da regulação.`;
+                texto = `Atenção, senha complexidade prioridade ${numero}, dirija-se à sala da regulação`;
             } else if (siglaFicha === 'C') {
-                texto = `Atenção, senha complexidade normal ${numero}, dirija-se à sala da regulação.`;
+                texto = `Atenção, senha complexidade normal ${numero}, dirija-se à sala da regulação`;
             } else {
-                texto = `Atenção, senha ${numero}, dirija-se à sala da regulação.`;
+                texto = `Atenção, senha ${numero}, dirija-se à sala da regulação`;
+            }
+
+            if (guiche) {
+                texto += ` ao guichê ${guiche}.`;
+            } else {
+                texto += '.';
             }
 
             // Lógica inteligente de silêncio (Apenas a cada 10 minutos)
@@ -172,7 +178,12 @@
 
             const mensagem = new SpeechSynthesisUtterance(texto);
             mensagem.lang = 'pt-BR';
-            mensagem.rate = 0.88; 
+            mensagem.rate = 0.88;
+            // #region agent log
+            mensagem.onend = () => {
+                fetch('http://127.0.0.1:7359/ingest/e8cc8bae-73d1-44f5-9670-5e9f1cabc4a1',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38e5fb'},body:JSON.stringify({sessionId:'38e5fb',location:'tv.html:falar:onend',message:'tts terminou sem emitir tv_terminou_de_falar',data:{fichaStr,guiche},hypothesisId:'C',timestamp:Date.now(),runId:'pre-fix'})}).catch(()=>{});
+            };
+            // #endregion
             
             window.speechSynthesis.speak(mensagem);
         }
@@ -287,8 +298,12 @@
         // Nova comunicação com o Servidor V2
         socket.on('tocar_chamada_tv', (dados) => {
             clearTimeout(timerVoltarParaAguardando);
+            // #region agent log
+            fetch('http://127.0.0.1:7359/ingest/e8cc8bae-73d1-44f5-9670-5e9f1cabc4a1',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38e5fb'},body:JSON.stringify({sessionId:'38e5fb',location:'tv.html:tocar_chamada_tv',message:'chamada recebida na tv',data:{ficha:dados.ficha,emiteTvTerminou:false},hypothesisId:'C',timestamp:Date.now(),runId:'pre-fix'})}).catch(()=>{});
+            // #endregion
 
             const fichaStr = dados.ficha;
+            const guiche = dados.guiche;
             const siglaFicha = fichaStr.split(' ')[0];
             const corPiscar = (siglaFicha === 'RP' || siglaFicha === 'CP') ? 'piscar-prioridade' : 'piscar-normal';
             
@@ -307,10 +322,11 @@
             fichaElem.className = `senha-numero ${corPiscar}`;
             fichaElem.innerText = fichaStr;
             
-            document.getElementById('tv-setor').innerText = nomeSetor;
-
-            adicionarAoHistorico(fichaStr);
-            falar(fichaStr);
+            document.getElementById('tv-setor').innerText = nomeSetor + (guiche ? ` — Guichê ${guiche}` : '');
+            const instr = document.querySelector('.instrucao-sala');
+            instr.innerText = guiche ? `DIRIJA-SE AO GUICHÊ ${guiche}` : 'DIRIJA-SE À SALA DA REGULAÇÃO';
+            adicionarAoHistorico(fichaStr + (guiche ? ` (G${guiche})` : ''));
+            falar(fichaStr, guiche);
 
             timerVoltarParaAguardando = setTimeout(voltarTelaPadrao, 25000);
         });
