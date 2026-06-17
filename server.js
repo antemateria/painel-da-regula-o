@@ -27,7 +27,7 @@ const limitesFichas = {
 const fichasDesativadas = new Set(); // O 'Cofre' da Lista Negra
 // ==================================
 
-// 🟢 RADAR DE OPERADORES ONLINE 🟢
+// 🟢 NOVO: RADAR DE OPERADORES ONLINE 🟢
 const operadoresOnline = {}; 
 // ======================================
 
@@ -44,12 +44,6 @@ let timerSegurancaTV = null;
 const dadosPath = path.join(__dirname, 'dados.json');
 const fsPromises = fs.promises;
 const DEBUG_LOG = path.join(__dirname, 'public', 'debug-38e5fb.log');
-
-// 🟢 NOVO: ROTA PARA DOWNLOAD DO BACKUP VIA BOTÃO DO RESUMO 🟢
-app.get('/backup-dados', (req, res) => {
-    res.download(dadosPath, `backup-regulacao-${getDataString()}.json`);
-});
-// ==========================================================
 
 function dbgLog(location, message, data, hypothesisId) {
     try {
@@ -255,7 +249,7 @@ function enfileirarChamadaTV(pacoteDeChamada) {
     }
 }
 
-function ejecutarDisparoTV(pacoteDeChamada) {
+function executarDisparoTV(pacoteDeChamada) {
     tvFalando = true;
     io.emit('bloqueio_tv_ocupada', pacoteDeChamada);
     io.emit('tocar_chamada_tv', pacoteDeChamada);
@@ -306,9 +300,10 @@ io.on('connection', (socket) => {
     socket.emit('estado_servidor', obterEstadoAtual());
     socket.emit('atualizar_media_setores', calcularMediaPorSetor());
 
-    // === CONTROLE DE QUEM ESTÁ SENTADO NA MESA ===
+    // 🟢 NOVO: CONTROLE DE QUEM ESTÁ SENTADO NA MESA 🟢
     socket.on('estou_online', (nome) => {
         operadoresOnline[socket.id] = nome;
+        // Pega os nomes, remove duplicatas e envia para a tela do Auditor
         io.emit('operadores_online_atualizados', Array.from(new Set(Object.values(operadoresOnline))));
     });
 
@@ -318,6 +313,7 @@ io.on('connection', (socket) => {
             io.emit('operadores_online_atualizados', Array.from(new Set(Object.values(operadoresOnline))));
         }
     });
+    // ==================================================
 
     // === RECEBE COMANDOS DO PAINEL DO CELULAR (MATRIZ FÍSICA) ===
     socket.on('toggleFichaFisica', (idFicha) => {
@@ -338,7 +334,7 @@ io.on('connection', (socket) => {
         console.log(`Lote físico [${prefixo}] reativado no sistema.`);
     });
 
-    // === PAINEL DO DIRETOR / AUDITOR / RESUMO ===
+    // === A ROTA NOVA PARA O PAINEL DO DIRETOR / AUDITOR ===
     socket.on('pedir_dados_auditoria', () => {
         socket.emit('receber_dados_auditoria', historicoAtendimentos);
     });
@@ -496,8 +492,9 @@ io.on('connection', (socket) => {
             emitirEstadoCompleto();
             salvarDados();
             
-            // EMPURRA O DADO NOVO PRO AUDITOR E RESUMO NA MESMA HORA (SEM PRECISAR DE F5)
+            // 🟢 NOVO: EMPURRA O DADO NOVO PRO AUDITOR NA MESMA HORA (SEM PRECISAR DE F5) 🟢
             io.emit('receber_dados_auditoria', historicoAtendimentos);
+            // ==============================================================================
         }
 
         socket.emit('guiche_liberado_com_sucesso');
