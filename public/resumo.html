@@ -24,6 +24,32 @@
         .header i { font-size: 32px; color: var(--accent-purple); }
         .header h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
         
+        /* 🟢 NOVO: ESTILO DO BOTÃO DE DOWNLOAD */
+        .btn-download {
+            background-color: #10b981; /* Verde moderno */
+            color: #ffffff;
+            padding: 12px 20px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
+            transition: all 0.2s ease;
+        }
+        .btn-download:hover {
+            background-color: #059669;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 8px -1px rgba(16, 185, 129, 0.3);
+        }
+        .btn-download:active {
+            transform: translateY(0);
+        }
+        
         .kpi-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 25px; }
         .kpi-card { background: var(--bg-card); padding: 25px; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: center; }
         .kpi-title { font-size: 14px; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; margin-bottom: 10px; display: flex; justify-content: space-between;}
@@ -33,7 +59,6 @@
         .panel { background: var(--bg-card); padding: 25px; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 25px; }
         .panel-header { font-size: 18px; font-weight: 700; color: var(--text-primary); margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
         
-        /* GRID DE SETORES */
         .sect-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
         .sect-card { background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0; }
         .sect-title { font-size: 16px; font-weight: 800; color: var(--text-primary); margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;}
@@ -42,8 +67,6 @@
         .operador-item { display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 12px 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #f1f5f9; }
         .op-nome { font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
         .op-media { font-weight: 800; color: var(--accent-blue); background: rgba(59, 130, 246, 0.1); padding: 4px 10px; border-radius: 6px; font-size: 14px;}
-        
-        .badge-red { background: rgba(239, 68, 68, 0.1); color: var(--accent-red); padding: 4px 10px; border-radius: 6px; font-size: 14px; font-weight: 800; }
     </style>
 </head>
 <body>
@@ -56,9 +79,13 @@
                 <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px; font-weight: 500;">Análise profunda de absenteísmo, picos e produtividade</p>
             </div>
         </div>
+        
+        <a href="/backup-dados" class="btn-download">
+            <i class="ph-bold ph-download-simple"></i>
+            Baixar Banco de Dados (.json)
+        </a>
     </div>
 
-    <!-- KPIs TOPO -->
     <div class="kpi-container">
         <div class="kpi-card">
             <div class="kpi-title">Dias de Operação <i class="ph ph-calendar-blank" style="font-size: 20px;"></i></div>
@@ -78,18 +105,15 @@
         </div>
     </div>
 
-    <!-- GRÁFICO DE LINHAS (PICOS POR HORA) -->
     <div class="panel">
         <div class="panel-header"><i class="ph-fill ph-chart-line-up" style="color: var(--accent-purple);"></i> Média de Pacientes por Horário (Curva de Pico)</div>
         <canvas id="graficoHoras" height="70"></canvas>
     </div>
 
-    <!-- PRODUTIVIDADE POR SETOR -->
     <div class="panel">
         <div class="panel-header"><i class="ph-fill ph-users-three" style="color: var(--accent-blue);"></i> Média Diária de Atendimentos por Regulador</div>
         
         <div class="sect-grid">
-            <!-- Coluna Regulação -->
             <div class="sect-card">
                 <div class="sect-title" style="color: #8b5cf6;"><i class="ph-fill ph-stethoscope"></i> Regulação</div>
                 <div class="operador-list" id="lista-regulacao">
@@ -97,7 +121,6 @@
                 </div>
             </div>
 
-            <!-- Coluna Complexidade -->
             <div class="sect-card">
                 <div class="sect-title" style="color: #f59e0b;"><i class="ph-fill ph-heartbeat"></i> Complexidade</div>
                 <div class="operador-list" id="lista-complexidade">
@@ -105,7 +128,6 @@
                 </div>
             </div>
 
-            <!-- Coluna Autorização -->
             <div class="sect-card">
                 <div class="sect-title" style="color: #10b981;"><i class="ph-fill ph-file-text"></i> Autorização</div>
                 <div class="operador-list" id="lista-autorizacao">
@@ -125,39 +147,24 @@
         socket.on('receber_dados_auditoria', (historico) => {
             if (!historico || historico.length === 0) return;
 
-            // Variáveis Gerais
             let totalFaltas = 0;
             let totalAtendidos = 0;
             const diasTrabalhadosGlobais = new Set();
-            
-            // Variáveis para Gráfico de Hora
             const contagemHoras = {};
-            
-            // Variáveis para Produtividade dos Operadores
             const statsOperadores = {}; 
 
-            // ==========================================
-            // 1. VARREDURA DE DADOS (O MOTOR DE CÁLCULO)
-            // ==========================================
             historico.forEach(item => {
-                // Guarda o dia para saber o total de dias úteis da clínica
                 if(item.data) diasTrabalhadosGlobais.add(item.data);
-
-                // Absenteísmo
                 if (item.resultado === 'falta') totalFaltas++;
                 if (item.resultado === 'atendido') totalAtendidos++;
 
-                // Lógica apenas para quem FOI ATENDIDO
                 if (item.resultado === 'atendido') {
-                    
-                    // --- PICOS DE HORÁRIO ---
                     if (item.horaAtendimento) {
                         const dataObj = new Date(item.horaAtendimento);
                         const hora = dataObj.getHours().toString().padStart(2, '0') + ':00';
                         contagemHoras[hora] = (contagemHoras[hora] || 0) + 1;
                     }
 
-                    // --- PRODUTIVIDADE POR SETOR E OPERADOR ---
                     if (item.atendente && item.setor) {
                         const chaveOp = `${item.setor}|${item.atendente}`;
                         if (!statsOperadores[chaveOp]) {
@@ -171,22 +178,17 @@
 
             const numDiasTotal = diasTrabalhadosGlobais.size || 1;
 
-            // ==========================================
-            // 2. EXIBINDO OS KPIs (TOPO)
-            // ==========================================
             document.getElementById('kpi-dias').innerText = numDiasTotal;
 
-            // Cálculo da Taxa de Absenteísmo (Faltas / Total Chamado)
             const totalChamadasGerais = totalAtendidos + totalFaltas;
             const taxaFaltas = totalChamadasGerais > 0 ? ((totalFaltas / totalChamadasGerais) * 100).toFixed(1) : 0;
             document.getElementById('kpi-absenteismo').innerText = taxaFaltas;
 
-            // Encontrar o Horário de Pico Médio
             let horaPico = '--:--';
             let maxMediaPico = 0;
             
-            // Prepara arrays pro gráfico de linhas
-            const horasOrdem = ["07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00"];
+            // Lista expandida para os seus testes noturnos também!
+            const horasOrdem = ["07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"];
             const mediasPorHora = [];
 
             horasOrdem.forEach(h => {
@@ -203,35 +205,25 @@
             document.getElementById('kpi-pico-hora').innerText = horaPico;
             document.getElementById('kpi-pico-valor').innerText = `(${maxMediaPico.toFixed(1)} pac/dia)`;
 
-            // ==========================================
-            // 3. DESENHANDO O GRÁFICO DE LINHAS (CURVA)
-            // ==========================================
             desenharGraficoLinha(horasOrdem, mediasPorHora);
 
-            // ==========================================
-            // 4. PREENCHENDO AS LISTAS DE PRODUTIVIDADE
-            // ==========================================
             const listas = {
                 'Regulação': document.getElementById('lista-regulacao'),
                 'Complexidade': document.getElementById('lista-complexidade'),
                 'Autorização': document.getElementById('lista-autorizacao')
             };
 
-            // Limpa as listas
             Object.values(listas).forEach(el => el.innerHTML = '');
 
-            // Transforma o objeto num array para poder ordenar do mais produtivo pro menos
             const arrayOperadores = Object.keys(statsOperadores).map(chave => {
                 const [setor, nome] = chave.split('|');
                 const stats = statsOperadores[chave];
                 const diasTrabalhados = stats.diasAtivos.size || 1;
                 const mediaDiaria = stats.totalFichas / diasTrabalhados;
                 return { setor, nome, mediaDiaria: Math.round(mediaDiaria) };
-            }).sort((a, b) => b.mediaDiaria - a.mediaDiaria); // Ordena do maior pro menor
+            }).sort((a, b) => b.mediaDiaria - a.mediaDiaria);
 
-            // Imprime na tela
             arrayOperadores.forEach(op => {
-                // Filtro de segurança caso o setor venha com letra minúscula/maiúscula errada
                 let destino = listas['Regulação'];
                 if(op.setor.toLowerCase().includes('complexidade')) destino = listas['Complexidade'];
                 if(op.setor.toLowerCase().includes('autoriza')) destino = listas['Autorização'];
@@ -244,7 +236,6 @@
                 `;
             });
 
-            // Se algum setor ficar vazio, avisa:
             Object.values(listas).forEach(el => {
                 if(el.innerHTML === '') el.innerHTML = '<span style="color: var(--text-secondary); font-size: 14px; font-style: italic;">Sem atendimentos</span>';
             });
@@ -268,8 +259,8 @@
                         pointBorderColor: '#8b5cf6',
                         pointBorderWidth: 2,
                         pointRadius: 4,
-                        fill: true, // Pinta a área embaixo da linha
-                        tension: 0.4 // Deixa a linha suave/curvada
+                        fill: true,
+                        tension: 0.4
                     }]
                 },
                 options: {
