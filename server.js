@@ -16,6 +16,21 @@ let filaPacientes = [];
 let contadores = { 'RP': 1, 'R': 1, 'CP': 1, 'C': 1, 'AT': 1 };
 let turnos = { 'REGULACAO': 'P', 'COMPLEXIDADE': 'P', 'AUTORIZACAO': 'P' };
 
+// === CONTROLE DE FICHAS FÍSICAS ===
+const limitesFichas = {
+    'R': 160,
+    'RP': 160,
+    'C': 48,
+    'CP': 48,
+    'AT': 160 
+};
+const fichasDesativadas = new Set(); // O 'Cofre' da Lista Negra
+// ==================================
+
+// 🟢 NOVO: RADAR DE OPERADORES ONLINE 🟢
+const operadoresOnline = {}; 
+// ======================================
+
 let ultimosChamados = {
     'Regulação': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
     'Complexidade': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
@@ -29,13 +44,12 @@ let timerSegurancaTV = null;
 const dadosPath = path.join(__dirname, 'dados.json');
 const fsPromises = fs.promises;
 const DEBUG_LOG = path.join(__dirname, 'public', 'debug-38e5fb.log');
-// #region agent log
+
 function dbgLog(location, message, data, hypothesisId) {
     try {
         fs.appendFileSync(DEBUG_LOG, JSON.stringify({ sessionId: '38e5fb', location, message, data, hypothesisId, timestamp: Date.now(), runId: 'pre-fix' }) + '\n');
     } catch (e) { /* ignore */ }
 }
-// #endregion
 
 function getDataString() {
     return new Date().toISOString().slice(0, 10);
@@ -107,25 +121,20 @@ async function carregarDados() {
 
         reconstruirContagens();
         console.log('✅ Dados carregados de dados.json');
-        // #region agent log
         dbgLog('server.js:carregarDados', 'dados carregados ok', { filaLen: filaPacientes.length, contadores }, 'A');
-        // #endregion
     } catch (err) {
         if (err.code !== 'ENOENT') {
             console.error('❌ Erro ao carregar dados.json:', err);
         }
-        // #region agent log
         dbgLog('server.js:carregarDados', 'falha ao carregar dados', { errCode: err.code, errMsg: err.message }, 'A');
-        // #endregion
     }
 }
 
 function reconstruirContagens() {
     atendimentosPorOperador = {};
-    const hoje = getDataString(); // Pega a data atual (AAAA-MM-DD)
+    const hoje = getDataString(); 
     
     historicoAtendimentos.forEach(item => {
-        // Só conta no painel se foi atendido HOJE
         if (item.resultado === 'atendido' && item.atendente && item.data === hoje) {
             atendimentosPorOperador[item.atendente] = (atendimentosPorOperador[item.atendente] || 0) + 1;
         }
@@ -166,16 +175,14 @@ const mapeamentoSetores = {
     'AT': 'Autorização'
 };
 
-// 🌟 FUNÇÃO DE RESET COMPLETO (PRESERVA O HISTÓRICO MORTO)
+// 🌟 FUNÇÃO DE RESET COMPLETO
 function realizarResetGeral() {
     clearTimeout(timerSegurancaTV);
     
-    // Limpa apenas as filas operacionais do dia
     filaPacientes = []; 
     filaDeEsperaTV = []; 
     tvFalando = false; 
     
-    // Reseta as senhas para voltarem a emitir a partir do 01 de manhã
     contadores = { 'RP': 1, 'R': 1, 'CP': 1, 'C': 1, 'AT': 1 };
     turnos = { 'REGULACAO': 'P', 'COMPLEXIDADE': 'P', 'AUTORIZACAO': 'P' };
     
@@ -187,18 +194,15 @@ function realizarResetGeral() {
     
     statusDia = { aberto: true, data: getDataString() };
     
-    // Avisa todas as telas que o dia virou
     io.emit('atualizar_fila', filaPacientes);
     io.emit('atualizar_painel_setores', ultimosChamados);
     enviarQuantitativosFila();
     io.emit('liberar_botoes_tv_livre');
     io.emit('limpar_tv'); 
-    
-    // Força os painéis dos reguladores a pedirem a contagem nova (que vai dar 0 por causa da nova data)
     io.emit('sistema_resetado');
     
     emitirEstadoCompleto();
-    salvarDados(); // Salva no dados.json mantendo o historicoAtendimentos guardado!
+    salvarDados(); 
     console.log(`⏰ Mudança de turno concluída! Novo dia iniciado: ${statusDia.data}`);
 }
 
@@ -207,18 +211,17 @@ function agendarResetMeiaNoite() {
     const agora = new Date();
     const meiaNoite = new Date();
     
-    meiaNoite.setHours(24, 0, 0, 0); // Define para a próxima meia-noite
+    meiaNoite.setHours(24, 0, 0, 0); 
     
     const tempoAteMeiaNoite = meiaNoite.getTime() - agora.getTime();
     
     setTimeout(() => {
         realizarResetGeral();
-        // Depois do primeiro reset, agenda para rodar a cada 24 horas
         setInterval(realizarResetGeral, 24 * 60 * 60 * 1000);
     }, tempoAteMeiaNoite);
 }
 
-// 🌟 SISTEMA ANTI-COCHILO (PING AUTOMÁTICO A CADA 10 MINUTOS)
+// 🌟 SISTEMA ANTI-COCHILO
 const URL_DO_SEU_SISTEMA = "https://painel-da-regulacao.onrender.com"; 
 
 setInterval(() => {
@@ -227,8 +230,7 @@ setInterval(() => {
     }).on('error', (err) => {
         console.log("❌ Erro no ping anti-cochilo:", err.message);
     });
-}, 10 * 60 * 1000); // 10 minutos em milissegundos
-
+}, 10 * 60 * 1000); 
 
 function enviarQuantitativosFila() {
     const quantitativos = {
@@ -250,17 +252,12 @@ function enfileirarChamadaTV(pacoteDeChamada) {
 function executarDisparoTV(pacoteDeChamada) {
     tvFalando = true;
     io.emit('bloqueio_tv_ocupada', pacoteDeChamada);
-    // Envia pacote completo (ficha, nome, guiche) para a TV
     io.emit('tocar_chamada_tv', pacoteDeChamada);
-    // #region agent log
     dbgLog('server.js:executarDisparoTV', 'tv disparo iniciado', { ficha: pacoteDeChamada.ficha, filaEsperaLen: filaDeEsperaTV.length }, 'C');
-    // #endregion
 
     clearTimeout(timerSegurancaTV);
     timerSegurancaTV = setTimeout(() => {
-        // #region agent log
         dbgLog('server.js:timerSegurancaTV', 'timer 7s expirou liberando tv', { ficha: pacoteDeChamada.ficha }, 'C');
-        // #endregion
         liberarServidorEProximo();
     }, 7000);
 }
@@ -272,9 +269,7 @@ function liberarServidorEProximo() {
     } else {
         tvFalando = false;
         io.emit('liberar_botoes_tv_livre');
-        // #region agent log
         dbgLog('server.js:liberarServidorEProximo', 'tv liberada', {}, 'C');
-        // #endregion
     }
 }
 
@@ -292,7 +287,6 @@ function extrairFichaComRegra(setorNome, prefixoPadrao) {
     if (index !== -1) {
         const ficha = filaPacientes[index];
         ficha.status = 'SALA';
-        
         turnos[setorNome] = (turnos[setorNome] === 'P') ? 'N' : 'P';
         return ficha;
     }
@@ -306,32 +300,88 @@ io.on('connection', (socket) => {
     socket.emit('estado_servidor', obterEstadoAtual());
     socket.emit('atualizar_media_setores', calcularMediaPorSetor());
 
-    // DEVOLVE A PRODUÇÃO DIÁRIA PARA A TELA DO OPERADOR
+    // 🟢 NOVO: CONTROLE DE QUEM ESTÁ SENTADO NA MESA 🟢
+    socket.on('estou_online', (nome) => {
+        operadoresOnline[socket.id] = nome;
+        // Pega os nomes, remove duplicatas e envia para a tela do Auditor
+        io.emit('operadores_online_atualizados', Array.from(new Set(Object.values(operadoresOnline))));
+    });
+
+    socket.on('disconnect', () => {
+        if(operadoresOnline[socket.id]) {
+            delete operadoresOnline[socket.id];
+            io.emit('operadores_online_atualizados', Array.from(new Set(Object.values(operadoresOnline))));
+        }
+    });
+    // ==================================================
+
+    // === RECEBE COMANDOS DO PAINEL DO CELULAR (MATRIZ FÍSICA) ===
+    socket.on('toggleFichaFisica', (idFicha) => {
+        if (fichasDesativadas.has(idFicha)) {
+            fichasDesativadas.delete(idFicha); 
+        } else {
+            fichasDesativadas.add(idFicha); 
+        }
+        console.log("Status da Lista Negra de Fichas:", Array.from(fichasDesativadas));
+    });
+
+    socket.on('resetarLoteFisico', (prefixo) => {
+        fichasDesativadas.forEach(ficha => {
+            if (ficha.startsWith(`${prefixo}-`)) {
+                fichasDesativadas.delete(ficha);
+            }
+        });
+        console.log(`Lote físico [${prefixo}] reativado no sistema.`);
+    });
+
+    // === A ROTA NOVA PARA O PAINEL DO DIRETOR / AUDITOR ===
+    socket.on('pedir_dados_auditoria', () => {
+        socket.emit('receber_dados_auditoria', historicoAtendimentos);
+    });
+
     socket.on('pedir_minha_producao', (nomeOperador) => {
-        const dataHoje = getDataString(); // Consistência com a formatação AAAA-MM-DD
-        
-        // Filtra no histórico APENAS as fichas de hoje, deste operador, que foram 'atendidas'
+        const dataHoje = getDataString(); 
         const meusAtendimentos = historicoAtendimentos.filter(ficha => 
             ficha.atendente === nomeOperador && 
             ficha.data === dataHoje && 
             ficha.resultado === 'atendido'
         );
-
-        // Manda a quantidade de volta para a tela do operador
         socket.emit('receber_minha_producao', meusAtendimentos.length);
     });
 
+    // === MOTOR INTELIGENTE DE PULAR FICHAS PERDIDAS ===
     socket.on('adicionar_ficha', (dados) => {
-        const numero = contadores[dados.filaOpcao].toString().padStart(2, '0');
-        const codigoFicha = `${dados.filaOpcao} ${numero}`;
-        contadores[dados.filaOpcao]++;
+        const prefixo = dados.filaOpcao;
+        let limite = limitesFichas[prefixo] || 160; 
+        let tentativas = 0;
+        let numeroValidado = contadores[prefixo]; 
+
+        while (tentativas < limite) {
+            let numeroFormatado = contadores[prefixo].toString().padStart(2, '0');
+            let idFicha = `${prefixo}-${numeroFormatado}`; 
+
+            if (!fichasDesativadas.has(idFicha)) {
+                numeroValidado = contadores[prefixo];
+                
+                contadores[prefixo]++;
+                if (contadores[prefixo] > limite) contadores[prefixo] = 1;
+                break; 
+            }
+            
+            contadores[prefixo]++;
+            if (contadores[prefixo] > limite) contadores[prefixo] = 1;
+            tentativas++;
+        }
+
+        const numeroString = numeroValidado.toString().padStart(2, '0');
+        const codigoFicha = `${prefixo} ${numeroString}`;
 
         const novaFicha = {
             id: Date.now().toString(),
             ficha: codigoFicha,
             nome: dados.nome ? dados.nome.trim() : '',
-            setor: mapeamentoSetores[dados.filaOpcao] || 'Regulação',
-            fila: dados.filaOpcao,
+            setor: mapeamentoSetores[prefixo] || 'Regulação',
+            fila: prefixo,
             status: 'LOBBY',
             horarioEmissao: new Date().toISOString(),
             horarioAtendimento: null
@@ -346,12 +396,9 @@ io.on('connection', (socket) => {
 
     socket.on('chamar_para_atendimento', (setorDoPainel) => {
         if (tvFalando) {
-            // #region agent log
             dbgLog('server.js:chamar_para_atendimento', 'bloqueado tvFalando', { setorDoPainel }, 'D');
-            // #endregion
             return;
         }
-        // aceitar tanto string (antigo) quanto objeto { setor, guiche }
         let setor = setorDoPainel;
         let guiche = null;
         if (typeof setorDoPainel === 'object' && setorDoPainel !== null) {
@@ -391,20 +438,21 @@ io.on('connection', (socket) => {
             socket.emit('erro_sem_paciente_na_sala', 'Não há pacientes aguardando para o seu setor.');
         }
     });
-socket.on('rechamar_paciente_tv', (pacienteRechamado) => {
+
+    socket.on('rechamar_paciente_tv', (pacienteRechamado) => {
         const pacoteDeChamada = { 
             ficha: pacienteRechamado.ficha, 
             nome: pacienteRechamado.nome,
-            guiche: pacienteRechamado.guiche // Agora o servidor repassa a informação do guichê!
+            guiche: pacienteRechamado.guiche 
         };
         enfileirarChamadaTV(pacoteDeChamada);
     });
 
+    // === GRAVAÇÃO COMPLETA DA UBS, PROCEDIMENTOS E ORIGEM NO HISTÓRICO ===
     socket.on('registrar_conclusao_atendimento', (dados) => {
-        const { setor, resultado, idFicha, operador } = dados;
+        const { setor, resultado, idFicha, operador, ubs, procedimentos, redeOrigem } = dados;
         const atendente = operador || 'Desconhecido';
         
-        // Procura o paciente na fila ativa
         const idx = filaPacientes.findIndex(p => p.id === idFicha || p.ficha === dados.siglaFicha);
 
         if (idx !== -1) {
@@ -413,7 +461,6 @@ socket.on('rechamar_paciente_tv', (pacienteRechamado) => {
             const horaAtendimento = paciente.horarioAtendimento || new Date().toISOString();
             const tempoEspera = Math.max(0, Math.round((new Date(horaAtendimento) - new Date(horaChegada)) / 60000));
 
-            // Grava no Array do Arquivo Morto
             historicoAtendimentos.push({
                 id: paciente.id,
                 ficha: paciente.ficha,
@@ -423,13 +470,14 @@ socket.on('rechamar_paciente_tv', (pacienteRechamado) => {
                 atendente,
                 tempoEspera,
                 resultado,
-                data: getDataString() // Salva no formato AAAA-MM-DD estável
+                ubs: ubs || 'Não informada',
+                procedimentos: procedimentos || 'Nenhum',
+                redeOrigem: redeOrigem || 'Não informada',
+                data: getDataString() 
             });
 
-            // Remove o paciente da fila ativa de memória para o painel não ficar pesado
             filaPacientes.splice(idx, 1);
 
-            // Atualiza a contagem rápida de hoje na RAM
             if (resultado === 'atendido') {
                 atendimentosPorOperador[atendente] = (atendimentosPorOperador[atendente] || 0) + 1;
             }
@@ -443,23 +491,23 @@ socket.on('rechamar_paciente_tv', (pacienteRechamado) => {
             enviarQuantitativosFila();
             emitirEstadoCompleto();
             salvarDados();
+            
+            // 🟢 NOVO: EMPURRA O DADO NOVO PRO AUDITOR NA MESMA HORA (SEM PRECISAR DE F5) 🟢
+            io.emit('receber_dados_auditoria', historicoAtendimentos);
+            // ==============================================================================
         }
 
         socket.emit('guiche_liberado_com_sucesso');
     });
 
     socket.on('tv_terminou_de_falar', () => {
-        // #region agent log
         dbgLog('server.js:tv_terminou_de_falar', 'evento recebido da tv', {}, 'C');
-        // #endregion
         clearTimeout(timerSegurancaTV); 
         liberarServidorEProximo();
     });
 
     socket.on('resposta_estado_cliente', (estado) => {
-        // #region agent log
         dbgLog('server.js:resposta_estado_cliente', 'cliente enviou estado mas servidor nao restaura', { filaLen: estado && estado.filaPacientes ? estado.filaPacientes.length : null }, 'E');
-        // #endregion
     });
 
     socket.on('excluir_ficha', (idFicha) => {
