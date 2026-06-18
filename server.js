@@ -24,12 +24,10 @@ const limitesFichas = {
     'CP': 48,
     'AT': 160 
 };
-const fichasDesativadas = new Set(); // O 'Cofre' da Lista Negra
-// ==================================
+const fichasDesativadas = new Set(); 
 
-// 🟢 NOVO: RADAR DE OPERADORES ONLINE 🟢
+// === RADAR DE OPERADORES ONLINE ===
 const operadoresOnline = {}; 
-// ======================================
 
 let ultimosChamados = {
     'Regulação': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
@@ -44,6 +42,11 @@ let timerSegurancaTV = null;
 const dadosPath = path.join(__dirname, 'dados.json');
 const fsPromises = fs.promises;
 const DEBUG_LOG = path.join(__dirname, 'public', 'debug-38e5fb.log');
+
+// === ROTA PARA DOWNLOAD DO BANK DE DADOS ===
+app.get('/backup-dados', (req, res) => {
+    res.download(dadosPath, `backup-regulacao-${getDataString()}.json`);
+});
 
 function dbgLog(location, message, data, hypothesisId) {
     try {
@@ -70,6 +73,86 @@ function obterEstadoAtual() {
         statusDia,
         atendimentosPorOperador
     };
+}
+
+// === NOVO: MOTOR DE INTELIGÊNCIA MATEMÁTICA (VARIÂNCIA E DESVIO PADRÃO) ===
+function calcularEstatisticasAbsenteismo() {
+    const dadosPorDia = {};
+    
+    // Agrupa o histórico bruto por dia e por setor
+    historicoAtendimentos.forEach(item => {
+        if (!item.data) return;
+        
+        if (!dadosPorDia[item.data]) {
+            dadosPorDia[item.data] = { total: 0, faltas: 0, setores: {} };
+        }
+        
+        const setor = item.setor || 'Regulação';
+        if (!dadosPorDia[item.data].setores[setor]) {
+            dadosPorDia[item.data].setores[setor] = { total: 0, faltas: 0 };
+        }
+        
+        if (item.resultado === 'atendido' || item.resultado === 'falta') {
+            dadosPorDia[item.data].total++;
+            dadosPorDia[item.data].setores[setor].total++;
+        }
+        if (item.resultado === 'falta') {
+            dadosPorDia[item.data].faltas++;
+            dadosPorDia[item.data].setores[setor].faltas++;
+        }
+    });
+    
+    const listaDatas = Object.keys(dadosPorDia);
+    
+    // Função auxiliar para calcular Média, Variância Amostral e Desvio Padrão
+    const processarMetricas = (arrayTaxas) => {
+        const n = arrayTaxas.length;
+        if (n === 0) return { media: 0, variancia: 0, desvioPadrao: 0 };
+        
+        const media = arrayTaxas.reduce((a, b) => a + b, 0) / n;
+        if (n <= 1) return { media: Math.round(media), variancia: 0, desvioPadrao: 0 };
+        
+        // Soma dos quadrados das diferenças: Σ(xi - x_media)²
+        const somaQuadrados = arrayTaxas.reduce((acc, val) => acc + Math.pow(val - media, 2), 0);
+        
+        // Variância Amostral: s² = Σ(xi - x_media)² / (n - 1)
+        const variancia = somaQuadrados / (n - 1);
+        
+        // Desvio Padrão Amostral: s = √s²
+        const desvioPadrao = Math.sqrt(variancia);
+        
+        return {
+            media: Math.round(media),
+            variancia: Math.round(variancia * 100) / 100,
+            desvioPadrao: Math.round(desvioPadrao * 100) / 100
+        };
+    };
+    
+    // Calcula métricas globais (Geral)
+    const taxasGerais = listaDatas.map(d => {
+        const dia = dadosPorDia[d];
+        return dia.total > 0 ? (dia.faltas / dia.total) * 100 : 0;
+    });
+    
+    const estatisticas = {
+        geral: processarMetricas(taxasGerais),
+        setores: {}
+    };
+    
+    // Calcula métricas isoladas por setor de atendimento
+    const setoresDisponiveis = ['Regulação', 'Complexidade', 'Autorização'];
+    setoresDisponiveis.forEach(setor => {
+        const taxasSetor = [];
+        listaDatas.forEach(d => {
+            const diaSetor = dadosPorDia[d].setores[setor];
+            if (diaSetor && diaSetor.total > 0) {
+                taxasSetor.push((diaSetor.faltas / diaSetor.total) * 100);
+            }
+        });
+        estatisticas.setores[setor] = processarMetricas(taxasSetor);
+    });
+    
+    return estatisticas;
 }
 
 function salvarDados() {
@@ -167,6 +250,8 @@ function calcularMediaPorSetor() {
 function emitirEstadoCompleto() {
     io.emit('estado_servidor', obterEstadoAtual());
     io.emit('atualizar_media_setores', calcularMediaPorSetor());
+    // Envia os cálculos de Variância e Desvio Padrão prontos para os dashboards
+    io.emit('atualizar_estatisticas_absenteismo', calcularEstatisticasAbsenteismo());
 }
 
 const mapeamentoSetores = {
@@ -175,7 +260,6 @@ const mapeamentoSetores = {
     'AT': 'Autorização'
 };
 
-// 🌟 FUNÇÃO DE RESET COMPLETO
 function realizarResetGeral() {
     clearTimeout(timerSegurancaTV);
     
@@ -206,7 +290,6 @@ function realizarResetGeral() {
     console.log(`⏰ Mudança de turno concluída! Novo dia iniciado: ${statusDia.data}`);
 }
 
-// 🌟 TIMER AUTOMÁTICO PARA A MEIA-NOITE
 function agendarResetMeiaNoite() {
     const agora = new Date();
     const meiaNoite = new Date();
@@ -221,7 +304,6 @@ function agendarResetMeiaNoite() {
     }, tempoAteMeiaNoite);
 }
 
-// 🌟 SISTEMA ANTI-COCHILO
 const URL_DO_SEU_SISTEMA = "https://painel-da-regulacao.onrender.com"; 
 
 setInterval(() => {
@@ -299,11 +381,11 @@ io.on('connection', (socket) => {
     enviarQuantitativosFila();
     socket.emit('estado_servidor', obterEstadoAtual());
     socket.emit('atualizar_media_setores', calcularMediaPorSetor());
+    // Garante que o painel receba os dados estatísticos assim que conectar
+    socket.emit('atualizar_estatisticas_absenteismo', calcularEstatisticasAbsenteismo());
 
-    // 🟢 NOVO: CONTROLE DE QUEM ESTÁ SENTADO NA MESA 🟢
     socket.on('estou_online', (nome) => {
         operadoresOnline[socket.id] = nome;
-        // Pega os nomes, remove duplicatas e envia para a tela do Auditor
         io.emit('operadores_online_atualizados', Array.from(new Set(Object.values(operadoresOnline))));
     });
 
@@ -313,9 +395,7 @@ io.on('connection', (socket) => {
             io.emit('operadores_online_atualizados', Array.from(new Set(Object.values(operadoresOnline))));
         }
     });
-    // ==================================================
 
-    // === RECEBE COMANDOS DO PAINEL DO CELULAR (MATRIZ FÍSICA) ===
     socket.on('toggleFichaFisica', (idFicha) => {
         if (fichasDesativadas.has(idFicha)) {
             fichasDesativadas.delete(idFicha); 
@@ -334,7 +414,6 @@ io.on('connection', (socket) => {
         console.log(`Lote físico [${prefixo}] reativado no sistema.`);
     });
 
-    // === A ROTA NOVA PARA O PAINEL DO DIRETOR / AUDITOR ===
     socket.on('pedir_dados_auditoria', () => {
         socket.emit('receber_dados_auditoria', historicoAtendimentos);
     });
@@ -349,14 +428,13 @@ io.on('connection', (socket) => {
         socket.emit('receber_minha_producao', meusAtendimentos.length);
     });
 
-    // === MOTOR INTELIGENTE DE PULAR FICHAS PERDIDAS ===
     socket.on('adicionar_ficha', (dados) => {
         const prefixo = dados.filaOpcao;
         let limite = limitesFichas[prefixo] || 160; 
-        let tentativas = 0;
+        let tentatives = 0;
         let numeroValidado = contadores[prefixo]; 
 
-        while (tentativas < limite) {
+        while (tentatives < limite) {
             let numeroFormatado = contadores[prefixo].toString().padStart(2, '0');
             let idFicha = `${prefixo}-${numeroFormatado}`; 
 
@@ -370,7 +448,7 @@ io.on('connection', (socket) => {
             
             contadores[prefixo]++;
             if (contadores[prefixo] > limite) contadores[prefixo] = 1;
-            tentativas++;
+            tentatives++;
         }
 
         const numeroString = numeroValidado.toString().padStart(2, '0');
@@ -448,7 +526,6 @@ io.on('connection', (socket) => {
         enfileirarChamadaTV(pacoteDeChamada);
     });
 
-    // === GRAVAÇÃO COMPLETA DA UBS, PROCEDIMENTOS E ORIGEM NO HISTÓRICO ===
     socket.on('registrar_conclusao_atendimento', (dados) => {
         const { setor, resultado, idFicha, operador, ubs, procedimentos, redeOrigem } = dados;
         const atendente = operador || 'Desconhecido';
@@ -491,10 +568,6 @@ io.on('connection', (socket) => {
             enviarQuantitativosFila();
             emitirEstadoCompleto();
             salvarDados();
-            
-            // 🟢 NOVO: EMPURRA O DADO NOVO PRO AUDITOR NA MESMA HORA (SEM PRECISAR DE F5) 🟢
-            io.emit('receber_dados_auditoria', historicoAtendimentos);
-            // ==============================================================================
         }
 
         socket.emit('guiche_liberado_com_sucesso');
