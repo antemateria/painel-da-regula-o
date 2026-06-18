@@ -220,6 +220,7 @@
         inicializarGuiche();
 
         socket.on('connect', () => {
+            socket.emit('estou_online', operadorLogado);
             socket.emit('pedir_minha_producao', operadorLogado);
         });
 
@@ -394,7 +395,6 @@
                     rechamadasUsadas = 2;
                     iniciarCooldown();
                 } else if (rechamadasUsadas === 2) {
-                    // A MÁGICA DA 3ª CHAMADA (O guichê vira nulo, a TV chama direto pra Sala)
                     pacoteRechamada.guiche = null;
                     socket.emit('rechamar_paciente_tv', pacoteRechamada);
                     rechamadasUsadas = 3;
