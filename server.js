@@ -631,6 +631,329 @@ async function iniciarServidor() {
     server.listen(PORT, () => console.log(`🚀 Motor rodando na porta ${PORT}`));
 }
 
+iniciarServidor();        'AUTORIZACAO': filaPacientes.filter(p => p.setor === 'Autorização' && p.status === 'LOBBY').length
+    };
+    io.emit('atualizar_contagem_paineis', quantitativos);
+}
+
+function enfileirarChamadaTV(pacoteDeChamada) {
+    if (tvFalando) {
+        filaDeEsperaTV.push(pacoteDeChamada);
+    } else {
+        executarDisparoTV(pacoteDeChamada);
+    }
+}
+
+function executarDisparoTV(pacoteDeChamada) {
+    tvFalando = true;
+    io.emit('bloqueio_tv_ocupada', pacoteDeChamada);
+    io.emit('tocar_chamada_tv', pacoteDeChamada);
+    dbgLog('server.js:executarDisparoTV', 'tv disparo iniciado', { ficha: pacoteDeChamada.ficha, filaEsperaLen: filaDeEsperaTV.length }, 'C');
+
+    clearTimeout(timerSegurancaTV);
+    timerSegurancaTV = setTimeout(() => {
+        dbgLog('server.js:timerSegurancaTV', 'timer 7s expirou liberando tv', { ficha: pacoteDeChamada.ficha }, 'C');
+        liberarServidorEProximo();
+    }, 7000);
+}
+
+function liberarServidorEProximo() {
+    if (filaDeEsperaTV.length > 0) {
+        const proximaChamada = filaDeEsperaTV.shift();
+        executarDisparoTV(proximaChamada);
+    } else {
+        tvFalando = false;
+        io.emit('liberar_botoes_tv_livre');
+        dbgLog('server.js:liberarServidorEProximo', 'tv liberada', {}, 'C');
+    }
+}
+
+function extrairFichaComRegra(setorNome, prefixoPadrao) {
+    const turnoAtual = turnos[setorNome];
+    const siglaAlvo = (turnoAtual === 'P') ? `${prefixoPadrao}P` : prefixoPadrao;
+    
+    let index = filaPacientes.findIndex(f => f.fila === siglaAlvo && f.status === 'LOBBY');
+    
+    if (index === -1) {
+        const siglaAlternativa = (turnoAtual === 'P') ? prefixoPadrao : `${prefixoPadrao}P`;
+        index = filaPacientes.findIndex(f => f.fila === siglaAlternativa && f.status === 'LOBBY');
+    }
+
+    if (index !== -1) {
+        const ficha = filaPacientes[index];
+        ficha.status = 'SALA';
+        turnos[setorNome] = (turnos[setorNome] === 'P') ? 'N' : 'P';
+        return ficha;
+    }
+    return null;
+}
+
+io.on('connection', (socket) => {
+    socket.emit('atualizar_fila', filaPacientes);
+    socket.emit('atualizar_painel_setores', ultimosChamados);
+    enviarQuantitativosFila();
+    socket.emit('estado_servidor', obterEstadoAtual());
+    socket.emit('atualizar_media_setores', calcularMediaPorSetor());
+    socket.emit('atualizar_estatisticas_absenteismo', calcularEstatisticasAbsenteismo());
+
+    // === RECEBE AS FICHAS GERADAS NO MODO OFFLINE ===
+    socket.on('sincronizar_fichas_offline', (listaFichasOffline) => {
+        let atualizouAlgum = false;
+
+        listaFichasOffline.forEach(fichaOffline => {
+            // Verifica se a ficha já existe para não duplicar
+            const jaExiste = filaPacientes.some(p => p.id === fichaOffline.id || p.ficha === fichaOffline.ficha);
+            
+            if (!jaExiste) {
+                filaPacientes.push(fichaOffline);
+                
+                // Atualiza o contador do servidor para não repetir a numeração
+                const prefixo = fichaOffline.fila;
+                const numeroFichaOffline = parseInt(fichaOffline.ficha.split(' ')[1], 10);
+                
+                if (numeroFichaOffline >= contadores[prefixo]) {
+                    contadores[prefixo] = numeroFichaOffline + 1;
+                }
+                atualizouAlgum = true;
+            }
+        });
+
+        if (atualizouAlgum) {
+            io.emit('atualizar_fila', filaPacientes);
+            enviarQuantitativosFila();
+            emitirEstadoCompleto();
+            salvarDados();
+        }
+        
+        socket.emit('sincronizacao_concluida'); 
+    });
+
+    socket.on('estou_online', (nome) => {
+        operadoresOnline[socket.id] = nome;
+        io.emit('operadores_online_atualizados', Array.from(new Set(Object.values(operadoresOnline))));
+    });
+
+    socket.on('disconnect', () => {
+        if(operadoresOnline[socket.id]) {
+            delete operadoresOnline[socket.id];
+            io.emit('operadores_online_atualizados', Array.from(new Set(Object.values(operadoresOnline))));
+        }
+    });
+
+    socket.on('toggleFichaFisica', (idFicha) => {
+        if (fichasDesativadas.has(idFicha)) {
+            fichasDesativadas.delete(idFicha); 
+        } else {
+            fichasDesativadas.add(idFicha); 
+        }
+        console.log("Status da Lista Negra de Fichas:", Array.from(fichasDesativadas));
+    });
+
+    socket.on('resetarLoteFisico', (prefixo) => {
+        fichasDesativadas.forEach(ficha => {
+            if (ficha.startsWith(`${prefixo}-`)) {
+                fichasDesativadas.delete(ficha);
+            }
+        });
+        console.log(`Lote físico [${prefixo}] reativado no sistema.`);
+    });
+
+    socket.on('pedir_dados_auditoria', () => {
+        socket.emit('receber_dados_auditoria', historicoAtendimentos);
+    });
+
+    socket.on('pedir_minha_producao', (nomeOperador) => {
+        const dataHoje = getDataString(); 
+        const meusAtendimentos = historicoAtendimentos.filter(ficha => 
+            ficha.atendente === nomeOperador && 
+            ficha.data === dataHoje && 
+            ficha.resultado === 'atendido'
+        );
+        socket.emit('receber_minha_producao', meusAtendimentos.length);
+    });
+
+    // ========================================================
+    // BLOCO DE GERAÇÃO E IMPRESSÃO DE FICHAS 
+    // ========================================================
+    socket.on('adicionar_ficha', (dados) => {
+        const prefixo = dados.filaOpcao;
+        let limite = limitesFichas[prefixo] || 160; 
+        let tentatives = 0;
+        let numeroValidado = contadores[prefixo]; 
+
+        while (tentatives < limite) {
+            let numeroFormatado = contadores[prefixo].toString().padStart(2, '0');
+            let idFicha = `${prefixo}-${numeroFormatado}`; 
+
+            if (!fichasDesativadas.has(idFicha)) {
+                numeroValidado = contadores[prefixo];
+                
+                contadores[prefixo]++;
+                if (contadores[prefixo] > limite) contadores[prefixo] = 1;
+                break; 
+            }
+            
+            contadores[prefixo]++;
+            if (contadores[prefixo] > limite) contadores[prefixo] = 1;
+            tentatives++;
+        }
+
+        const numeroString = numeroValidado.toString().padStart(2, '0');
+        const codigoFicha = `${prefixo} ${numeroString}`;
+
+        const novaFicha = {
+            id: Date.now().toString(),
+            ficha: codigoFicha,
+            nome: dados.nome ? dados.nome.trim() : '',
+            setor: mapeamentoSetores[prefixo] || 'Regulação',
+            fila: prefixo,
+            status: 'LOBBY',
+            horarioEmissao: new Date().toISOString(), // <-- A hora atômica
+            horarioAtendimento: null
+        };
+
+        filaPacientes.push(novaFicha);
+
+        // AQUI ESTÁ O GATILHO QUE AVISA A CPU PARA IMPRIMIR
+        io.emit('comando_imprimir_senha', novaFicha);
+
+        io.emit('atualizar_fila', filaPacientes);
+        enviarQuantitativosFila();
+        emitirEstadoCompleto();
+        salvarDados();
+    });
+
+    socket.on('chamar_para_atendimento', (setorDoPainel) => {
+        if (tvFalando) {
+            dbgLog('server.js:chamar_para_atendimento', 'bloqueado tvFalando', { setorDoPainel }, 'D');
+            return;
+        }
+        let setor = setorDoPainel;
+        let guiche = null;
+        if (typeof setorDoPainel === 'object' && setorDoPainel !== null) {
+            setor = setorDoPainel.setor;
+            guiche = setorDoPainel.guiche || null;
+        }
+
+        const nomeSetorReal = (setor === 'REGULACAO') ? 'Regulação' : (setor === 'COMPLEXIDADE') ? 'Complexidade' : 'Autorização';
+        const prefixo = (setor === 'REGULACAO') ? 'R' : (setor === 'COMPLEXIDADE') ? 'C' : 'AT';
+        
+        let pacienteEscolhido;
+        
+        if (setor === 'AUTORIZACAO') {
+            let idx = filaPacientes.findIndex(p => p.setor === 'Autorização' && p.status === 'LOBBY');
+            if (idx !== -1) {
+                pacienteEscolhido = filaPacientes[idx];
+                pacienteEscolhido.status = 'SALA';
+            }
+        } else {
+            pacienteEscolhido = extrairFichaComRegra(setor, prefixo);
+        }
+
+        if (pacienteEscolhido) {
+            pacienteEscolhido.horarioAtendimento = new Date().toISOString();
+            ultimosChamados[nomeSetorReal].unshift({ ficha: pacienteEscolhido.ficha, nome: pacienteEscolhido.nome });
+            if (ultimosChamados[nomeSetorReal].length > 2) ultimosChamados[nomeSetorReal].pop();
+            const pacoteDeChamada = { ficha: pacienteEscolhido.ficha, nome: pacienteEscolhido.nome, guiche };
+            enfileirarChamadaTV(pacoteDeChamada);
+
+            socket.emit('paciente_enviado_para_mesa', { paciente: pacienteEscolhido, guiche });
+            io.emit('atualizar_painel_setores', ultimosChamados);
+            io.emit('atualizar_fila', filaPacientes);
+            enviarQuantitativosFila();
+            emitirEstadoCompleto();
+            salvarDados();
+        } else {
+            socket.emit('erro_sem_paciente_na_sala', 'Não há pacientes aguardando para o seu setor.');
+        }
+    });
+
+    socket.on('rechamar_paciente_tv', (pacienteRechamado) => {
+        const pacoteDeChamada = { 
+            ficha: pacienteRechamado.ficha, 
+            nome: pacienteRechamado.nome,
+            guiche: pacienteRechamado.guiche 
+        };
+        enfileirarChamadaTV(pacoteDeChamada);
+    });
+
+    socket.on('registrar_conclusao_atendimento', (dados) => {
+        const { setor, resultado, idFicha, operador, ubs, procedimentos, redeOrigem } = dados;
+        const atendente = operador || 'Desconhecido';
+        
+        const idx = filaPacientes.findIndex(p => p.id === idFicha || p.ficha === dados.siglaFicha);
+
+        if (idx !== -1) {
+            const paciente = filaPacientes[idx];
+            const horaChegada = paciente.horarioEmissao || new Date(Number(paciente.id)).toISOString();
+            const horaAtendimento = paciente.horarioAtendimento || new Date().toISOString();
+            const tempoEspera = Math.max(0, Math.round((new Date(horaAtendimento) - new Date(horaChegada)) / 60000));
+
+            historicoAtendimentos.push({
+                id: paciente.id,
+                ficha: paciente.ficha,
+                setor: paciente.setor,
+                horaChegada,
+                horaAtendimento,
+                atendente,
+                tempoEspera,
+                resultado,
+                ubs: ubs || 'Não informada',
+                procedimentos: procedimentos || 'Nenhum',
+                redeOrigem: redeOrigem || 'Não informada',
+                data: getDataString() 
+            });
+
+            filaPacientes.splice(idx, 1);
+
+            if (resultado === 'atendido') {
+                atendimentosPorOperador[atendente] = (atendimentosPorOperador[atendente] || 0) + 1;
+            }
+
+            if (resultado === 'falta' && setor !== 'AUTORIZACAO') {
+                const isPriority = paciente.fila.endsWith('P');
+                turnos[setor] = isPriority ? 'P' : 'N';
+            }
+
+            io.emit('atualizar_fila', filaPacientes);
+            enviarQuantitativosFila();
+            emitirEstadoCompleto();
+            salvarDados();
+        }
+
+        socket.emit('guiche_liberado_com_sucesso');
+    });
+
+    socket.on('tv_terminou_de_falar', () => {
+        dbgLog('server.js:tv_terminou_de_falar', 'evento recebido da tv', {}, 'C');
+        clearTimeout(timerSegurancaTV); 
+        liberarServidorEProximo();
+    });
+
+    socket.on('resposta_estado_cliente', (estado) => {
+        dbgLog('server.js:resposta_estado_cliente', 'cliente enviou estado mas servidor nao restaura', { filaLen: estado && estado.filaPacientes ? estado.filaPacientes.length : null }, 'E');
+    });
+
+    socket.on('excluir_ficha', (idFicha) => {
+        filaPacientes = filaPacientes.filter(p => p.id !== idFicha);
+        io.emit('atualizar_fila', filaPacientes);
+        enviarQuantitativosFila();
+        emitirEstadoCompleto();
+        salvarDados();
+    });
+
+    socket.on('resetar_sistema', () => {
+        realizarResetGeral();
+    });
+});
+
+async function iniciarServidor() {
+    await carregarDados();
+    agendarResetMeiaNoite();
+    const PORT = process.env.PORT || 3000;
+    server.listen(PORT, () => console.log(`🚀 Motor rodando na porta ${PORT}`));
+}
+
 iniciarServidor();
 let filaDeEsperaTV = []; 
 let tvFalando = false;   
