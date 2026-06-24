@@ -9,6 +9,8 @@
 
         body { font-family: 'Inter', sans-serif; background-color: #7b1a1a; color: white; margin: 0; padding: 0; display: flex; height: 100vh; overflow: hidden; }
         
+        #alerta-som { position: fixed; top: 0; left: 0; width: 100%; background: #dc3545; color: white; text-align: center; padding: 10px; font-size: 18px; font-weight: bold; z-index: 9999; cursor: pointer; border-bottom: 3px solid #fff; }
+
         .coluna-esquerda { flex: 7; display: flex; flex-direction: column; justify-content: space-between; padding: 25px 40px; background: radial-gradient(circle, #8a1d1d 0%, #631212 100%); }
         .coluna-direita { flex: 3; display: flex; flex-direction: column; background-color: #4a0d0d; border-left: 5px solid #ffffff; padding: 25px 30px; }
 
@@ -54,12 +56,7 @@
 </head>
 <body>
 
-    <div id="cortina-tela-cheia" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #111; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; cursor: pointer; font-family: 'Inter', sans-serif;">
-        <h1 style="font-size: 5vw; margin-bottom: 20px; text-transform: uppercase; text-shadow: 2px 2px 10px rgba(0,0,0,0.8);">📺 Painel de Senhas</h1>
-        <p style="font-size: 2vw; background: #0f0; color: #000; padding: 20px 40px; border-radius: 15px; font-weight: 900; text-align: center; text-transform: uppercase; box-shadow: 0px 5px 15px rgba(0,255,0,0.3);">
-            CLIQUE AQUI PARA INICIAR EM TELA CHEIA<br>E ATIVAR O SOM DO PAINEL
-        </p>
-    </div>
+    <div id="alerta-som" onclick="activarAudio()">⚠️ O SOM ESTÁ BLOQUEADO! Clique aqui para ativar o áudio.</div>
 
     <div class="coluna-esquerda">
         
@@ -118,7 +115,7 @@
         const socket = io();
         let timerVoltarParaAguardando;
         let cicloMensagem = 0;
-        let ultimoAvisoSilencio = 0; 
+        let ultimoAvisoSilencio = 0; // Temporizador para o áudio de silêncio
         
         let historicoSetores = {
             autorizacao: [],
@@ -138,34 +135,11 @@
         atualizarRelogio();
 
         function activarAudio() {
+            document.getElementById('alerta-som').style.display = 'none';
             window.speechSynthesis.cancel();
             window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
         }
-
-        // ==========================================
-        // LÓGICA DE TELA CHEIA E SOM NA CORTINA PRETA
-        // ==========================================
-        document.getElementById('cortina-tela-cheia').addEventListener('click', function() {
-            // 1. Força a tela cheia no navegador da TV
-            let elemento = document.documentElement;
-            if (elemento.requestFullscreen) {
-                elemento.requestFullscreen();
-            } else if (elemento.webkitRequestFullscreen) { /* Chrome, Safari & Opera */
-                elemento.webkitRequestFullscreen();
-            } else if (elemento.msRequestFullscreen) { /* Edge antigo */
-                elemento.msRequestFullscreen();
-            }
-
-            // 2. Destrava o Áudio do Navegador para garantir a fala das senhas
-            activarAudio();
-            try {
-                let ctx = new (window.AudioContext || window.webkitAudioContext)();
-                ctx.resume();
-            } catch (e) { console.log("Áudio destravado com sucesso."); }
-
-            // 3. Esconde a cortina e mostra o painel bonito da TV
-            this.style.display = 'none';
-        });
+        document.body.addEventListener('click', activarAudio);
 
         function falar(fichaStr, guiche) {
             window.speechSynthesis.cancel(); 
@@ -195,6 +169,7 @@
                 texto += '.';
             }
 
+            // Lógica inteligente de silêncio (Apenas a cada 10 minutos)
             let agora = Date.now();
             if (agora - ultimoAvisoSilencio > 10 * 60 * 1000) { 
                 texto += " Por favor, faça silêncio por gentileza.";
@@ -226,6 +201,7 @@
                 rodape.innerHTML = `<h1 class="msg-alerta">AGUARDE SUA VEZ PARA ENTRAR NA SALA DE REGULAÇÃO</h1>`;
             } 
             else if (cicloMensagem === 2) {
+                // Removemos o áudio daqui para não atrapalhar, mas mantemos o visual
                 rodape.innerHTML = `<h1 class="msg-alerta msg-silencio">🤫 POR FAVOR, FAÇA SILÊNCIO</h1>`;
             } 
             else if (cicloMensagem === 3) {
@@ -308,6 +284,7 @@
 
         renderizarHistorico();
 
+        // Integração com o botão Reset do Painel da Recepção
         socket.on('sistema_resetado', () => {
             historicoSetores = {
                 autorizacao: [],
@@ -318,6 +295,7 @@
             voltarTelaPadrao(); 
         });
 
+        // Nova comunicação com o Servidor V2
         socket.on('tocar_chamada_tv', (dados) => {
             clearTimeout(timerVoltarParaAguardando);
             // #region agent log
