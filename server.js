@@ -5,11 +5,22 @@ const fs = require('fs');
 const path = require('path');
 const { Server } = require('socket.io');
 
+// --- IMPORTAÇÃO DO MONGODB ---
+const { MongoClient } = require('mongodb');
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.static('public'));
+
+// ========================================================
+// ☁️ CONFIGURAÇÃO DA CHAVE MESTRA DO MONGODB (O COFRE)
+// ========================================================
+// ATENÇÃO MOISÉS: Substitua "SUA_SENHA_AQUI" pela senha real que você gerou!
+const MONGO_URI = "mongodb+srv://admin:Po9pSRB2PerSlJ13@cluster0.y1bvdc1.mongodb.net/?appName=Cluster0";
+const mongoClient = new MongoClient(MONGO_URI);
+let dbCofre; // Variável que guarda a conexão com a nuvem
 
 // --- MEMÓRIA CENTRAL DO SISTEMA ---
 let filaPacientes = []; 
@@ -18,11 +29,7 @@ let turnos = { 'REGULACAO': 'P', 'COMPLEXIDADE': 'P', 'AUTORIZACAO': 'P' };
 
 // === CONTROLE DE FICHAS FÍSICAS ===
 const limitesFichas = {
-    'R': 160,
-    'RP': 160,
-    'C': 48,
-    'CP': 48,
-    'AT': 160 
+    'R': 160, 'RP': 160, 'C': 48, 'CP': 48, 'AT': 160 
 };
 const fichasDesativadas = new Set(); 
 
@@ -43,7 +50,6 @@ const dadosPath = path.join(__dirname, 'dados.json');
 const fsPromises = fs.promises;
 const DEBUG_LOG = path.join(__dirname, 'public', 'debug-38e5fb.log');
 
-// === ROTA PARA DOWNLOAD DO BANCO DE DADOS ===
 app.get('/backup-dados', (req, res) => {
     res.download(dadosPath, `backup-regulacao-${getDataString()}.json`);
 });
@@ -65,31 +71,18 @@ let pendingWrite = null;
 let lastWriteContent = null;
 
 function obterEstadoAtual() {
-    return {
-        filaPacientes,
-        contadores,
-        turnos,
-        ultimosChamados,
-        statusDia,
-        atendimentosPorOperador
-    };
+    return { filaPacientes, contadores, turnos, ultimosChamados, statusDia, atendimentosPorOperador };
 }
 
-// === MOTOR DE INTELIGÊNCIA MATEMÁTICA (VARIÂNCIA E DESVIO PADRÃO) ===
+// === MOTOR DE INTELIGÊNCIA MATEMÁTICA ===
 function calcularEstatisticasAbsenteismo() {
     const dadosPorDia = {};
     
     historicoAtendimentos.forEach(item => {
         if (!item.data) return;
-        
-        if (!dadosPorDia[item.data]) {
-            dadosPorDia[item.data] = { total: 0, faltas: 0, setores: {} };
-        }
-        
+        if (!dadosPorDia[item.data]) dadosPorDia[item.data] = { total: 0, faltas: 0, setores: {} };
         const setor = item.setor || 'Regulação';
-        if (!dadosPorDia[item.data].setores[setor]) {
-            dadosPorDia[item.data].setores[setor] = { total: 0, faltas: 0 };
-        }
+        if (!dadosPorDia[item.data].setores[setor]) dadosPorDia[item.data].setores[setor] = { total: 0, faltas: 0 };
         
         if (item.resultado === 'atendido' || item.resultado === 'falta') {
             dadosPorDia[item.data].total++;
@@ -102,23 +95,15 @@ function calcularEstatisticasAbsenteismo() {
     });
     
     const listaDatas = Object.keys(dadosPorDia);
-    
     const processarMetricas = (arrayTaxas) => {
         const n = arrayTaxas.length;
         if (n === 0) return { media: 0, variancia: 0, desvioPadrao: 0 };
-        
         const media = arrayTaxas.reduce((a, b) => a + b, 0) / n;
         if (n <= 1) return { media: Math.round(media), variancia: 0, desvioPadrao: 0 };
-        
         const somaQuadrados = arrayTaxas.reduce((acc, val) => acc + Math.pow(val - media, 2), 0);
         const variancia = somaQuadrados / (n - 1);
         const desvioPadrao = Math.sqrt(variancia);
-        
-        return {
-            media: Math.round(media),
-            variancia: Math.round(variancia * 100) / 100,
-            desvioPadrao: Math.round(desvioPadrao * 100) / 100
-        };
+        return { media: Math.round(media), variancia: Math.round(variancia * 100) / 100, desvioPadrao: Math.round(desvioPadrao * 100) / 100 };
     };
     
     const taxasGerais = listaDatas.map(d => {
@@ -126,88 +111,104 @@ function calcularEstatisticasAbsenteismo() {
         return dia.total > 0 ? (dia.faltas / dia.total) * 100 : 0;
     });
     
-    const estatisticas = {
-        geral: processarMetricas(taxasGerais),
-        setores: {}
-    };
-    
+    const estatisticas = { geral: processarMetricas(taxasGerais), setores: {} };
     const setoresDisponiveis = ['Regulação', 'Complexidade', 'Autorização'];
     setoresDisponiveis.forEach(setor => {
         const taxasSetor = [];
         listaDatas.forEach(d => {
             const diaSetor = dadosPorDia[d].setores[setor];
-            if (diaSetor && diaSetor.total > 0) {
-                taxasSetor.push((diaSetor.faltas / diaSetor.total) * 100);
-            }
+            if (diaSetor && diaSetor.total > 0) taxasSetor.push((diaSetor.faltas / diaSetor.total) * 100);
         });
         estatisticas.setores[setor] = processarMetricas(taxasSetor);
     });
-    
     return estatisticas;
 }
 
+// ========================================================
+// 💾 NOVO SISTEMA DE GRAVAÇÃO HÍBRIDA (JSON + MONGO)
+// ========================================================
 function salvarDados() {
-    const dataString = JSON.stringify({
-        filaPacientes,
-        contadores,
-        turnos,
-        ultimosChamados,
-        statusDia,
-        atendimentosPorOperador,
-        historicoAtendimentos
-    }, null, 2);
-
+    const dadosObj = {
+        id_documento: 'backup_principal', // Identificador fixo para o Mongo
+        filaPacientes, contadores, turnos, ultimosChamados,
+        statusDia, atendimentosPorOperador, historicoAtendimentos
+    };
+    
+    const dataString = JSON.stringify(dadosObj, null, 2);
     lastWriteContent = dataString;
 
-    if (pendingWrite) {
-        return pendingWrite;
+    // 1. Grava no disco local imediatamente (A impressora não sofre atraso)
+    if (!pendingWrite) {
+        pendingWrite = fsPromises.writeFile(dadosPath, dataString, 'utf8')
+            .catch((err) => console.error('❌ Erro local:', err))
+            .then(() => {
+                pendingWrite = null;
+                if (lastWriteContent !== dataString) salvarDados();
+            });
     }
 
-    pendingWrite = fsPromises.writeFile(dadosPath, dataString, 'utf8')
-        .catch((err) => {
-            console.error('❌ Erro ao salvar dados.json:', err);
-        })
-        .then(() => {
-            pendingWrite = null;
-            if (lastWriteContent !== dataString) {
-                salvarDados();
-            }
-        });
+    // 2. O Piloto Automático: Envia pro Atlas silenciosamente em segundo plano
+    if (dbCofre) {
+        dbCofre.collection('estado_regulacao').updateOne(
+            { id_documento: 'backup_principal' }, 
+            { $set: dadosObj }, 
+            { upsert: true }
+        ).catch(err => console.error("❌ Falha no envio invisível para a nuvem:", err));
+    }
 
     return pendingWrite;
 }
 
+// ========================================================
+// 🔄 NOVO SISTEMA DE BOOT (RESTAURAÇÃO AUTOMÁTICA)
+// ========================================================
 async function carregarDados() {
+    try {
+        // Tenta conectar no Mongo primeiro
+        await mongoClient.connect();
+        dbCofre = mongoClient.db('db_regulacao');
+        console.log("☁️ Conectado com Sucesso ao Cofre Atlas!");
+
+        // Busca o backup na nuvem
+        const dadosNuvem = await dbCofre.collection('estado_regulacao').findOne({ id_documento: 'backup_principal' });
+        
+        if (dadosNuvem) {
+            console.log("✈️ Restaurando dados a partir da nuvem...");
+            aplicarDadosNaMemoria(dadosNuvem);
+            
+            // Força a atualização do JSON local para ficar igual à nuvem
+            await fsPromises.writeFile(dadosPath, JSON.stringify(dadosNuvem, null, 2), 'utf8');
+            return; // Se deu certo, sai da função
+        }
+    } catch (err) {
+        console.log("⚠️ Nuvem indisponível no momento. Recorrendo ao armazenamento local.");
+        console.log("🕵️ DETALHE DO ERRO MONGODB:", err.message); // <--- ADICIONE ESTA LINHA
+    }
+    // Fallback: Se não tem internet ou o Mongo falhou, lê o JSON local
     try {
         await fsPromises.access(dadosPath, fs.constants.F_OK);
         const raw = await fsPromises.readFile(dadosPath, 'utf8');
-        const dados = JSON.parse(raw);
-
-        if (dados && Array.isArray(dados.filaPacientes)) filaPacientes = dados.filaPacientes;
-        if (dados && typeof dados.contadores === 'object' && dados.contadores !== null) contadores = dados.contadores;
-        if (dados && typeof dados.turnos === 'object' && dados.turnos !== null) {
-            turnos = Object.assign({ 'REGULACAO': 'P', 'COMPLEXIDADE': 'P', 'AUTORIZACAO': 'P' }, dados.turnos);
-        }
-        if (dados && typeof dados.ultimosChamados === 'object' && dados.ultimosChamados !== null) ultimosChamados = dados.ultimosChamados;
-        if (dados && typeof dados.statusDia === 'object' && dados.statusDia !== null) statusDia = dados.statusDia;
-        if (dados && typeof dados.atendimentosPorOperador === 'object' && dados.atendimentosPorOperador !== null) atendimentosPorOperador = dados.atendimentosPorOperador;
-        if (dados && Array.isArray(dados.historicoAtendimentos)) historicoAtendimentos = dados.historicoAtendimentos;
-
-        reconstruirContagens();
-        console.log('✅ Dados carregados de dados.json');
-        dbgLog('server.js:carregarDados', 'dados carregados ok', { filaLen: filaPacientes.length, contadores }, 'A');
+        aplicarDadosNaMemoria(JSON.parse(raw));
+        console.log('✅ Dados carregados localmente do dados.json');
     } catch (err) {
-        if (err.code !== 'ENOENT') {
-            console.error('❌ Erro ao carregar dados.json:', err);
-        }
-        dbgLog('server.js:carregarDados', 'falha ao carregar dados', { errCode: err.code, errMsg: err.message }, 'A');
+        console.log("⚠️ Sistema iniciando 100% zerado. Nenhum backup encontrado.");
     }
+}
+
+function aplicarDadosNaMemoria(dados) {
+    if (dados && Array.isArray(dados.filaPacientes)) filaPacientes = dados.filaPacientes;
+    if (dados && typeof dados.contadores === 'object') contadores = dados.contadores;
+    if (dados && typeof dados.turnos === 'object') turnos = Object.assign({ 'REGULACAO': 'P', 'COMPLEXIDADE': 'P', 'AUTORIZACAO': 'P' }, dados.turnos);
+    if (dados && typeof dados.ultimosChamados === 'object') ultimosChamados = dados.ultimosChamados;
+    if (dados && typeof dados.statusDia === 'object') statusDia = dados.statusDia;
+    if (dados && typeof dados.atendimentosPorOperador === 'object') atendimentosPorOperador = dados.atendimentosPorOperador;
+    if (dados && Array.isArray(dados.historicoAtendimentos)) historicoAtendimentos = dados.historicoAtendimentos;
+    reconstruirContagens();
 }
 
 function reconstruirContagens() {
     atendimentosPorOperador = {};
     const hoje = getDataString(); 
-    
     historicoAtendimentos.forEach(item => {
         if (item.resultado === 'atendido' && item.atendente && item.data === hoje) {
             atendimentosPorOperador[item.atendente] = (atendimentosPorOperador[item.atendente] || 0) + 1;
@@ -218,18 +219,14 @@ function reconstruirContagens() {
 function calcularMediaPorSetor() {
     const hoje = getDataString();
     const setores = { REGULACAO: [], COMPLEXIDADE: [], AUTORIZACAO: [] };
-
     historicoAtendimentos.forEach(item => {
-        if (item.resultado !== 'atendido') return;
-        if (!item.horaAtendimento) return;
+        if (item.resultado !== 'atendido' || !item.horaAtendimento) return;
         const dataAtendimento = item.horaAtendimento.slice(0, 10);
         if (dataAtendimento !== hoje) return;
-
         if (item.setor === 'Regulação') setores.REGULACAO.push(item.tempoEspera);
         if (item.setor === 'Complexidade') setores.COMPLEXIDADE.push(item.tempoEspera);
         if (item.setor === 'Autorização') setores.AUTORIZACAO.push(item.tempoEspera);
     });
-
     return {
         REGULACAO: setores.REGULACAO.length ? Math.round(setores.REGULACAO.reduce((a,b) => a+b,0) / setores.REGULACAO.length) : 0,
         COMPLEXIDADE: setores.COMPLEXIDADE.length ? Math.round(setores.COMPLEXIDADE.reduce((a,b) => a+b,0) / setores.COMPLEXIDADE.length) : 0,
@@ -245,36 +242,26 @@ function emitirEstadoCompleto() {
 }
 
 const mapeamentoSetores = {
-    'RP': 'Regulação', 'R': 'Regulação',
-    'CP': 'Complexidade', 'C': 'Complexidade',
-    'AT': 'Autorização'
+    'RP': 'Regulação', 'R': 'Regulação', 'CP': 'Complexidade', 'C': 'Complexidade', 'AT': 'Autorização'
 };
 
 function realizarResetGeral() {
     clearTimeout(timerSegurancaTV);
-    
-    filaPacientes = []; 
-    filaDeEsperaTV = []; 
-    tvFalando = false; 
-    
+    filaPacientes = []; filaDeEsperaTV = []; tvFalando = false; 
     contadores = { 'RP': 1, 'R': 1, 'CP': 1, 'C': 1, 'AT': 1 };
     turnos = { 'REGULACAO': 'P', 'COMPLEXIDADE': 'P', 'AUTORIZACAO': 'P' };
-    
     ultimosChamados = {
         'Regulação': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
         'Complexidade': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ],
         'Autorização': [ { ficha: '---', nome: 'Nenhum' }, { ficha: '---', nome: 'Nenhum' } ]
     };
-    
     statusDia = { aberto: true, data: getDataString() };
-    
     io.emit('atualizar_fila', filaPacientes);
     io.emit('atualizar_painel_setores', ultimosChamados);
     enviarQuantitativosFila();
     io.emit('liberar_botoes_tv_livre');
     io.emit('limpar_tv'); 
     io.emit('sistema_resetado');
-    
     emitirEstadoCompleto();
     salvarDados(); 
     console.log(`⏰ Mudança de turno concluída! Novo dia iniciado: ${statusDia.data}`);
@@ -283,11 +270,8 @@ function realizarResetGeral() {
 function agendarResetMeiaNoite() {
     const agora = new Date();
     const meiaNoite = new Date();
-    
     meiaNoite.setHours(24, 0, 0, 0); 
-    
     const tempoAteMeiaNoite = meiaNoite.getTime() - agora.getTime();
-    
     setTimeout(() => {
         realizarResetGeral();
         setInterval(realizarResetGeral, 24 * 60 * 60 * 1000);
@@ -325,11 +309,8 @@ function executarDisparoTV(pacoteDeChamada) {
     tvFalando = true;
     io.emit('bloqueio_tv_ocupada', pacoteDeChamada);
     io.emit('tocar_chamada_tv', pacoteDeChamada);
-    dbgLog('server.js:executarDisparoTV', 'tv disparo iniciado', { ficha: pacoteDeChamada.ficha, filaEsperaLen: filaDeEsperaTV.length }, 'C');
-
     clearTimeout(timerSegurancaTV);
     timerSegurancaTV = setTimeout(() => {
-        dbgLog('server.js:timerSegurancaTV', 'timer 7s expirou liberando tv', { ficha: pacoteDeChamada.ficha }, 'C');
         liberarServidorEProximo();
     }, 7000);
 }
@@ -341,14 +322,12 @@ function liberarServidorEProximo() {
     } else {
         tvFalando = false;
         io.emit('liberar_botoes_tv_livre');
-        dbgLog('server.js:liberarServidorEProximo', 'tv liberada', {}, 'C');
     }
 }
 
 function extrairFichaComRegra(setorNome, prefixoPadrao) {
     const turnoAtual = turnos[setorNome];
     const siglaAlvo = (turnoAtual === 'P') ? `${prefixoPadrao}P` : prefixoPadrao;
-    
     let index = filaPacientes.findIndex(f => f.fila === siglaAlvo && f.status === 'LOBBY');
     
     if (index === -1) {
@@ -373,38 +352,6 @@ io.on('connection', (socket) => {
     socket.emit('atualizar_media_setores', calcularMediaPorSetor());
     socket.emit('atualizar_estatisticas_absenteismo', calcularEstatisticasAbsenteismo());
 
-    // === RECEBE AS FICHAS GERADAS NO MODO OFFLINE ===
-    socket.on('sincronizar_fichas_offline', (listaFichasOffline) => {
-        let atualizouAlgum = false;
-
-        listaFichasOffline.forEach(fichaOffline => {
-            // Verifica se a ficha já existe para não duplicar
-            const jaExiste = filaPacientes.some(p => p.id === fichaOffline.id || p.ficha === fichaOffline.ficha);
-            
-            if (!jaExiste) {
-                filaPacientes.push(fichaOffline);
-                
-                // Atualiza o contador do servidor para não repetir a numeração
-                const prefixo = fichaOffline.fila;
-                const numeroFichaOffline = parseInt(fichaOffline.ficha.split(' ')[1], 10);
-                
-                if (numeroFichaOffline >= contadores[prefixo]) {
-                    contadores[prefixo] = numeroFichaOffline + 1;
-                }
-                atualizouAlgum = true;
-            }
-        });
-
-        if (atualizouAlgum) {
-            io.emit('atualizar_fila', filaPacientes);
-            enviarQuantitativosFila();
-            emitirEstadoCompleto();
-            salvarDados();
-        }
-        
-        socket.emit('sincronizacao_concluida'); 
-    });
-
     socket.on('estou_online', (nome) => {
         operadoresOnline[socket.id] = nome;
         io.emit('operadores_online_atualizados', Array.from(new Set(Object.values(operadoresOnline))));
@@ -418,21 +365,14 @@ io.on('connection', (socket) => {
     });
 
     socket.on('toggleFichaFisica', (idFicha) => {
-        if (fichasDesativadas.has(idFicha)) {
-            fichasDesativadas.delete(idFicha); 
-        } else {
-            fichasDesativadas.add(idFicha); 
-        }
-        console.log("Status da Lista Negra de Fichas:", Array.from(fichasDesativadas));
+        if (fichasDesativadas.has(idFicha)) fichasDesativadas.delete(idFicha); 
+        else fichasDesativadas.add(idFicha); 
     });
 
     socket.on('resetarLoteFisico', (prefixo) => {
         fichasDesativadas.forEach(ficha => {
-            if (ficha.startsWith(`${prefixo}-`)) {
-                fichasDesativadas.delete(ficha);
-            }
+            if (ficha.startsWith(`${prefixo}-`)) fichasDesativadas.delete(ficha);
         });
-        console.log(`Lote físico [${prefixo}] reativado no sistema.`);
     });
 
     socket.on('pedir_dados_auditoria', () => {
@@ -442,16 +382,12 @@ io.on('connection', (socket) => {
     socket.on('pedir_minha_producao', (nomeOperador) => {
         const dataHoje = getDataString(); 
         const meusAtendimentos = historicoAtendimentos.filter(ficha => 
-            ficha.atendente === nomeOperador && 
-            ficha.data === dataHoje && 
-            ficha.resultado === 'atendido'
+            ficha.atendente === nomeOperador && ficha.data === dataHoje && ficha.resultado === 'atendido'
         );
         socket.emit('receber_minha_producao', meusAtendimentos.length);
     });
 
-    // ========================================================
-    // BLOCO DE GERAÇÃO E IMPRESSÃO DE FICHAS 
-    // ========================================================
+    // === GERAÇÃO E IMPRESSÃO ===
     socket.on('adicionar_ficha', (dados) => {
         const prefixo = dados.filaOpcao;
         let limite = limitesFichas[prefixo] || 160; 
@@ -461,15 +397,12 @@ io.on('connection', (socket) => {
         while (tentatives < limite) {
             let numeroFormatado = contadores[prefixo].toString().padStart(2, '0');
             let idFicha = `${prefixo}-${numeroFormatado}`; 
-
             if (!fichasDesativadas.has(idFicha)) {
                 numeroValidado = contadores[prefixo];
-                
                 contadores[prefixo]++;
                 if (contadores[prefixo] > limite) contadores[prefixo] = 1;
                 break; 
             }
-            
             contadores[prefixo]++;
             if (contadores[prefixo] > limite) contadores[prefixo] = 1;
             tentatives++;
@@ -490,10 +423,7 @@ io.on('connection', (socket) => {
         };
 
         filaPacientes.push(novaFicha);
-
-        // Gatilho que avisa a impressora
         io.emit('comando_imprimir_senha', novaFicha);
-
         io.emit('atualizar_fila', filaPacientes);
         enviarQuantitativosFila();
         emitirEstadoCompleto();
@@ -501,10 +431,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('chamar_para_atendimento', (setorDoPainel) => {
-        if (tvFalando) {
-            dbgLog('server.js:chamar_para_atendimento', 'bloqueado tvFalando', { setorDoPainel }, 'D');
-            return;
-        }
+        if (tvFalando) return;
         let setor = setorDoPainel;
         let guiche = null;
         if (typeof setorDoPainel === 'object' && setorDoPainel !== null) {
@@ -514,7 +441,6 @@ io.on('connection', (socket) => {
 
         const nomeSetorReal = (setor === 'REGULACAO') ? 'Regulação' : (setor === 'COMPLEXIDADE') ? 'Complexidade' : 'Autorização';
         const prefixo = (setor === 'REGULACAO') ? 'R' : (setor === 'COMPLEXIDADE') ? 'C' : 'AT';
-        
         let pacienteEscolhido;
         
         if (setor === 'AUTORIZACAO') {
@@ -546,18 +472,13 @@ io.on('connection', (socket) => {
     });
 
     socket.on('rechamar_paciente_tv', (pacienteRechamado) => {
-        const pacoteDeChamada = { 
-            ficha: pacienteRechamado.ficha, 
-            nome: pacienteRechamado.nome,
-            guiche: pacienteRechamado.guiche 
-        };
+        const pacoteDeChamada = { ficha: pacienteRechamado.ficha, nome: pacienteRechamado.nome, guiche: pacienteRechamado.guiche };
         enfileirarChamadaTV(pacoteDeChamada);
     });
 
     socket.on('registrar_conclusao_atendimento', (dados) => {
         const { setor, resultado, idFicha, operador, ubs, procedimentos, redeOrigem } = dados;
         const atendente = operador || 'Desconhecido';
-        
         const idx = filaPacientes.findIndex(p => p.id === idFicha || p.ficha === dados.siglaFicha);
 
         if (idx !== -1) {
@@ -567,48 +488,28 @@ io.on('connection', (socket) => {
             const tempoEspera = Math.max(0, Math.round((new Date(horaAtendimento) - new Date(horaChegada)) / 60000));
 
             historicoAtendimentos.push({
-                id: paciente.id,
-                ficha: paciente.ficha,
-                setor: paciente.setor,
-                horaChegada,
-                horaAtendimento,
-                atendente,
-                tempoEspera,
-                resultado,
-                ubs: ubs || 'Não informada',
-                procedimentos: procedimentos || 'Nenhum',
-                redeOrigem: redeOrigem || 'Não informada',
-                data: getDataString() 
+                id: paciente.id, ficha: paciente.ficha, setor: paciente.setor, horaChegada, horaAtendimento,
+                atendente, tempoEspera, resultado, ubs: ubs || 'Não informada', procedimentos: procedimentos || 'Nenhum',
+                redeOrigem: redeOrigem || 'Não informada', data: getDataString() 
             });
 
             filaPacientes.splice(idx, 1);
-
-            if (resultado === 'atendido') {
-                atendimentosPorOperador[atendente] = (atendimentosPorOperador[atendente] || 0) + 1;
-            }
-
+            if (resultado === 'atendido') atendimentosPorOperador[atendente] = (atendimentosPorOperador[atendente] || 0) + 1;
             if (resultado === 'falta' && setor !== 'AUTORIZACAO') {
                 const isPriority = paciente.fila.endsWith('P');
                 turnos[setor] = isPriority ? 'P' : 'N';
             }
-
             io.emit('atualizar_fila', filaPacientes);
             enviarQuantitativosFila();
             emitirEstadoCompleto();
             salvarDados();
         }
-
         socket.emit('guiche_liberado_com_sucesso');
     });
 
     socket.on('tv_terminou_de_falar', () => {
-        dbgLog('server.js:tv_terminou_de_falar', 'evento recebido da tv', {}, 'C');
         clearTimeout(timerSegurancaTV); 
         liberarServidorEProximo();
-    });
-
-    socket.on('resposta_estado_cliente', (estado) => {
-        dbgLog('server.js:resposta_estado_cliente', 'cliente enviou estado mas servidor nao restaura', { filaLen: estado && estado.filaPacientes ? estado.filaPacientes.length : null }, 'E');
     });
 
     socket.on('excluir_ficha', (idFicha) => {
@@ -625,10 +526,11 @@ io.on('connection', (socket) => {
 });
 
 async function iniciarServidor() {
-    await carregarDados();
+    // Agora ele carrega da nuvem primeiro, se falhar, vai pro disco local!
+    await carregarDados(); 
     agendarResetMeiaNoite();
     const PORT = process.env.PORT || 3000;
-    server.listen(PORT, () => console.log(`🚀 Motor rodando na porta ${PORT}`));
+    server.listen(PORT, () => console.log(`🚀 Motor Híbrido rodando na porta ${PORT}`));
 }
 
 iniciarServidor();
