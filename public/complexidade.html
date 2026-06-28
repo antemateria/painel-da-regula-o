@@ -95,6 +95,51 @@
         .metrica-valor { font-size: 20px; font-weight: 900; color: #38bdf8; }
         .metrica-atendidos { color: #34d399; }
         .metrica-espera { color: #fbbf24; }
+
+        /* ========================================= */
+        /* ESTILOS DO NOVO MODAL DE CONCLUSÃO        */
+        /* ========================================= */
+        .modal-overlay { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; 
+            backdrop-filter: blur(4px); 
+        }
+        .modal-box { 
+            background: white; padding: 30px; border-radius: 16px; width: 90%; max-width: 420px; 
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); border: 1px solid #e5e7eb;
+        }
+        .modal-titulo { font-size: 22px; font-weight: 900; margin-top: 0; margin-bottom: 25px; color: #111827; }
+        .form-group { margin-bottom: 22px; text-align: left; }
+        .form-label { display: block; font-size: 14px; font-weight: 700; color: #374151; margin-bottom: 8px; }
+        
+        /* AUMENTO DA FONTE DO SELECT DE UBS */
+        .form-select { 
+            width: 100%; padding: 14px; border-radius: 8px; border: 2px solid #d1d5db; 
+            font-size: 20px; font-weight: 700; color: #1f2937; font-family: 'Inter', sans-serif; 
+            background-color: #f9fafb; transition: 0.2s; cursor: pointer;
+        }
+        .form-select option { font-size: 18px; }
+        .form-select:focus { outline: none; border-color: #3b82f6; background-color: white; }
+        
+        .check-group { display: flex; gap: 20px; margin-top: 8px; }
+        .check-item { 
+            display: flex; align-items: center; gap: 10px; font-size: 18px; color: #4b5563; 
+            font-weight: 600; cursor: pointer; 
+        }
+        /* AUMENTO DA CAIXA DO CHECKBOX */
+        .check-item input { width: 22px; height: 22px; cursor: pointer; }
+        
+        .modal-acoes { display: flex; gap: 15px; margin-top: 35px; }
+        .btn-cancelar { 
+            flex: 1; padding: 14px; background: #f3f4f6; color: #374151; border: none; 
+            border-radius: 10px; font-size: 16px; font-weight: 700; cursor: pointer; transition: 0.2s;
+        }
+        .btn-cancelar:hover { background: #e5e7eb; }
+        .btn-confirmar { 
+            flex: 2; padding: 14px; background: #10b981; color: white; border: none; 
+            border-radius: 10px; font-size: 16px; font-weight: 800; cursor: pointer; transition: 0.2s;
+        }
+        .btn-confirmar:hover { background: #059669; }
     </style>
 </head>
 <body>
@@ -138,7 +183,7 @@
                     <div class="acoes-paciente">
                         <button class="btn-acao btn-rechamar" onclick="rechamarPaciente()" id="btn-rechamar">🔊 Rechamar</button>
                         <button class="btn-acao btn-ausente" onclick="finalizarAtendimento('falta')" id="btn-ausente">❌ Faltou</button>
-                        <button class="btn-acao btn-atendido" onclick="finalizarAtendimento('atendido')" id="btn-atendido">✅ Atendido</button>
+                        <button class="btn-acao btn-atendido" onclick="abrirModalConclusao()" id="btn-atendido">✅ Atendido</button>
                     </div>
 
                     <div class="tempo-espera-badge" id="tempo-espera-atual">
@@ -163,10 +208,53 @@
 
     <div class="rodape-metricas">
         <div class="metrica">Aguardando: <span class="metrica-valor" id="metric-aguardando">0 pacientes</span></div>
-        <div class="metrica">Meus Atendimentos: <span class="metrica-valor metrica-atendidos" id="metric-atendidos">0</span></div>
-        <div class="metrica">Tempo médio (Setor): <span class="metrica-valor metrica-espera" id="metric-tempo">0 min</span></div>
+        <div class="metrica">Atendidos: <span class="metrica-valor metrica-atendidos" id="metric-atendidos">0</span></div>
+        <div class="metrica">Tempo de Espera: <span class="metrica-valor metrica-espera" id="metric-tempo">0 min</span></div>
     </div>
 
+    <div class="modal-overlay" id="modal-conclusao">
+        <div class="modal-box">
+            <h3 class="modal-titulo">Dados do Atendimento</h3>
+            
+            <div class="form-group">
+                <label class="form-label">Origem do Paciente (UBS) *</label>
+                <select class="form-select" id="select-ubs">
+                    <option value="">Selecione uma unidade...</option>
+                    <option value="Posto Central">Posto Central</option>
+                    <option value="Bela Vista">Bela Vista</option>
+                    <option value="Bela Vista Piató">Bela Vista Piató</option>
+                    <option value="Dom Elizeu">Dom Elizeu</option>
+                    <option value="Feliz Assú">Feliz Assú</option>
+                    <option value="Frutilândia I">Frutilândia I</option>
+                    <option value="Frutilândia II">Frutilândia II</option>
+                    <option value="Janduís">Janduís</option>
+                    <option value="Lagoa do Ferreiro">Lagoa do Ferreiro</option>
+                    <option value="Linda Flor">Linda Flor</option>
+                    <option value="Morada Nova">Morada Nova</option>
+                    <option value="Nova Esperança">Nova Esperança</option>
+                    <option value="Panon II">Panon II</option>
+                    <option value="Parati">Parati</option>
+                    <option value="Riacho">Riacho</option>
+                    <option value="São João">São João</option>
+                    <option value="Vertentes I">Vertentes I</option>
+                    <option value="Vertentes II">Vertentes II</option>
+                    <option value="Outras">Outras Cidades / Outras</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Procedimentos Solicitados</label>
+                <div class="check-group">
+                    <label class="check-item"><input type="checkbox" id="check-sangue" value="Sangue">Exame de Sangue</label>
+                </div>
+            </div>
+
+            <div class="modal-acoes">
+                <button class="btn-cancelar" onclick="fecharModalConclusao()">Cancelar</button>
+                <button class="btn-confirmar" onclick="confirmarEEnviarAtendimento()">Salvar e Concluir</button>
+            </div>
+        </div>
+    </div>
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
@@ -219,6 +307,7 @@
 
         socket.on('connect', () => {
             socket.emit('pedir_minha_producao', operadorLogado);
+            socket.emit('estou_online', operadorLogado);
         });
 
         socket.on('receber_minha_producao', (quantidade) => {
@@ -390,7 +479,6 @@
                     rechamadasUsadas = 2;
                     iniciarCooldown();
                 } else if (rechamadasUsadas === 2) {
-                    // A MÁGICA DA 3ª CHAMADA (O guichê vira nulo, a TV chama direto pra Sala)
                     pacoteRechamada.guiche = null;
                     socket.emit('rechamar_paciente_tv', pacoteRechamada);
                     rechamadasUsadas = 3;
@@ -420,14 +508,50 @@
             }, 1000);
         }
 
-        function finalizarAtendimento(status) {
+        // ==========================================
+        // LÓGICA DA JANELA FLUTUANTE (MODAL DE UBS)
+        // ==========================================
+        function abrirModalConclusao() {
+            document.getElementById('modal-conclusao').style.display = 'flex';
+        }
+
+        function fecharModalConclusao() {
+            document.getElementById('modal-conclusao').style.display = 'none';
+            document.getElementById('select-ubs').value = '';
+            document.getElementById('check-sangue').checked = false;
+        }
+
+        function confirmarEEnviarAtendimento() {
+            const ubsSelecionada = document.getElementById('select-ubs').value;
+            
+            if (!ubsSelecionada) {
+                alert('⚠️ Por favor, selecione a Origem do Paciente (Unidade de Saúde).');
+                return;
+            }
+
+            let procedimentosFormatados = "";
+            if (document.getElementById('check-sangue').checked) {
+                procedimentosFormatados = 'Sangue';
+            }
+
+            const dadosDoFormulario = {
+                ubs: ubsSelecionada,
+                procedimentos: procedimentosFormatados
+            };
+
+            fecharModalConclusao();
+            finalizarAtendimento('atendido', dadosDoFormulario);
+        }
+
+        function finalizarAtendimento(status, dadosExtras = {}) {
             if (pacienteEmAtendimento) {
                 socket.emit('registrar_conclusao_atendimento', {
                     setor: MEU_SETOR,
                     resultado: status,
                     siglaFicha: pacienteEmAtendimento.fila,
                     idFicha: pacienteEmAtendimento.id,
-                    operador: operadorLogado
+                    operador: operadorLogado,
+                    ...dadosExtras
                 });
 
                 setTimeout(() => {
