@@ -18,7 +18,7 @@
             box-sizing: border-box; flex-shrink: 0;
         }
         .info-operador { font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
-        .badge-setor { background: #3b82f6; padding: 5px 12px; border-radius: 6px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+        .badge-setor { background: #8b5cf6; padding: 5px 12px; border-radius: 6px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
         
         .btn-sair { background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; cursor: pointer; transition: 0.2s; }
         .btn-sair:hover { background: #dc2626; }
@@ -34,8 +34,8 @@
         .botoes-chamar { flex-shrink: 0; }
         .btn-chamar-fila { 
             width: 100%; height: 80px; border: none; border-radius: 16px; color: white; font-size: 22px; 
-            font-weight: 900; cursor: pointer; transition: transform 0.1s; box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.2); 
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
+            font-weight: 900; cursor: pointer; transition: transform 0.1s; box-shadow: 0 10px 15px -3px rgba(139, 92, 246, 0.2); 
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); 
         }
         .btn-chamar-fila:active:not(:disabled) { transform: scale(0.99); }
         .btn-chamar-fila:disabled { background: #e5e7eb !important; color: #9ca3af !important; box-shadow: none !important; cursor: not-allowed !important; border: 1px solid #d1d5db !important; }
@@ -66,18 +66,18 @@
             gap: 14px;
             margin-top: 22px;
             padding: 16px 24px;
-            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-            border: 2px solid #93c5fd;
+            background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+            border: 2px solid #c4b5fd;
             border-radius: 14px;
             width: 100%;
             max-width: 550px;
             box-sizing: border-box;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.12);
         }
         .tempo-espera-icone { font-size: 30px; line-height: 1; flex-shrink: 0; }
         .tempo-espera-textos { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
         .tempo-espera-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; color: #6b7280; }
-        .tempo-espera-valor { font-size: 24px; font-weight: 900; color: #1d4ed8; line-height: 1.1; }
+        .tempo-espera-valor { font-size: 24px; font-weight: 900; color: #6d28d9; line-height: 1.1; }
 
         .area-preview { flex: 3; background: white; border-radius: 16px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); border: 1px solid #e5e7eb; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
         .header-preview { background: #f9fafb; padding: 18px; border-bottom: 1px solid #e5e7eb; font-size: 16px; font-weight: 800; color: #374151; text-align: center; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 10px; user-select: none; }
@@ -85,16 +85,59 @@
         .lista-preview { padding: 15px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; }
         .lista-preview.fechado { max-height: 0px !important; padding: 0px !important; overflow: hidden; }
 
-        .item-preview { background: #f3f4f6; padding: 15px; border-radius: 10px; border-left: 6px solid #3b82f6; text-align: center; flex-shrink: 0; }
-        .prev-rp { border-left-color: #f59e0b; }
-        .prev-r { border-left-color: #3b82f6; }
+        .item-preview { background: #f3f4f6; padding: 15px; border-radius: 10px; border-left: 6px solid #8b5cf6; text-align: center; flex-shrink: 0; }
         .prev-senha { font-size: 22px; font-weight: 900; color: #111827; letter-spacing: 1px; }
 
         .rodape-metricas { height: 55px; background: #1f2937; color: white; padding: 0 30px; display: flex; justify-content: space-around; align-items: center; font-size: 15px; font-weight: 600; box-sizing: border-box; flex-shrink: 0; }
         .metrica { display: flex; align-items: center; gap: 8px; }
-        .metrica-valor { font-size: 20px; font-weight: 900; color: #38bdf8; }
+        .metrica-valor { font-size: 20px; font-weight: 900; color: #a78bfa; }
         .metrica-atendidos { color: #34d399; }
         .metrica-espera { color: #fbbf24; }
+
+        /* ========================================= */
+        /* ESTILOS DO NOVO MODAL DE CONCLUSÃO        */
+        /* ========================================= */
+        .modal-overlay { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; 
+            backdrop-filter: blur(4px); 
+        }
+        .modal-box { 
+            background: white; padding: 30px; border-radius: 16px; width: 90%; max-width: 420px; 
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); border: 1px solid #e5e7eb;
+        }
+        .modal-titulo { font-size: 22px; font-weight: 900; margin-top: 0; margin-bottom: 25px; color: #111827; }
+        .form-group { margin-bottom: 22px; text-align: left; }
+        .form-label { display: block; font-size: 14px; font-weight: 700; color: #374151; margin-bottom: 8px; }
+        
+        /* AUMENTO DA FONTE DO SELECT DE UBS */
+        .form-select { 
+            width: 100%; padding: 14px; border-radius: 8px; border: 2px solid #d1d5db; 
+            font-size: 20px; font-weight: 700; color: #1f2937; font-family: 'Inter', sans-serif; 
+            background-color: #f9fafb; transition: 0.2s; cursor: pointer;
+        }
+        .form-select option { font-size: 18px; }
+        .form-select:focus { outline: none; border-color: #8b5cf6; background-color: white; }
+        
+        .check-group { display: flex; gap: 20px; margin-top: 8px; }
+        .check-item { 
+            display: flex; align-items: center; gap: 10px; font-size: 18px; color: #4b5563; 
+            font-weight: 600; cursor: pointer; 
+        }
+        /* AUMENTO DA CAIXA DO CHECKBOX */
+        .check-item input { width: 22px; height: 22px; cursor: pointer; }
+        
+        .modal-acoes { display: flex; gap: 15px; margin-top: 35px; }
+        .btn-cancelar { 
+            flex: 1; padding: 14px; background: #f3f4f6; color: #374151; border: none; 
+            border-radius: 10px; font-size: 16px; font-weight: 700; cursor: pointer; transition: 0.2s;
+        }
+        .btn-cancelar:hover { background: #e5e7eb; }
+        .btn-confirmar { 
+            flex: 2; padding: 14px; background: #10b981; color: white; border: none; 
+            border-radius: 10px; font-size: 16px; font-weight: 800; cursor: pointer; transition: 0.2s;
+        }
+        .btn-confirmar:hover { background: #059669; }
     </style>
 </head>
 <body>
@@ -138,7 +181,7 @@
                     <div class="acoes-paciente">
                         <button class="btn-acao btn-rechamar" onclick="rechamarPaciente()" id="btn-rechamar">🔊 Rechamar</button>
                         <button class="btn-acao btn-ausente" onclick="finalizarAtendimento('falta')" id="btn-ausente">❌ Faltou</button>
-                        <button class="btn-acao btn-atendido" onclick="finalizarAtendimento('atendido')" id="btn-atendido">✅ Atendido</button>
+                        <button class="btn-acao btn-atendido" onclick="abrirModalConclusao()" id="btn-atendido">✅ Atendido</button>
                     </div>
 
                     <div class="tempo-espera-badge" id="tempo-espera-atual">
@@ -163,14 +206,58 @@
 
     <div class="rodape-metricas">
         <div class="metrica">Aguardando: <span class="metrica-valor" id="metric-aguardando">0 pacientes</span></div>
-        <div class="metrica">Meus Atendimentos: <span class="metrica-valor metrica-atendidos" id="metric-atendidos">0</span></div>
-        <div class="metrica">Tempo médio (Setor): <span class="metrica-valor metrica-espera" id="metric-tempo">0 min</span></div>
+        <div class="metrica">Atendidos: <span class="metrica-valor metrica-atendidos" id="metric-atendidos">0</span></div>
+        <div class="metrica">Tempo de Espera: <span class="metrica-valor metrica-espera" id="metric-tempo">0 min</span></div>
     </div>
 
+    <div class="modal-overlay" id="modal-conclusao">
+        <div class="modal-box">
+            <h3 class="modal-titulo">📋 Dados do Atendimento</h3>
+            
+            <div class="form-group">
+                <label class="form-label">Origem do Paciente (UBS) *</label>
+                <select class="form-select" id="select-ubs">
+                    <option value="">Selecione uma unidade...</option>
+                    <option value="Posto Central">Posto Central</option>
+                    <option value="Bela Vista">Bela Vista</option>
+                    <option value="Bela Vista Piató">Bela Vista Piató</option>
+                    <option value="Dom Elizeu">Dom Elizeu</option>
+                    <option value="Feliz Assú">Feliz Assú</option>
+                    <option value="Frutilândia I">Frutilândia I</option>
+                    <option value="Frutilândia II">Frutilândia II</option>
+                    <option value="Janduís">Janduís</option>
+                    <option value="Lagoa do Ferreiro">Lagoa do Ferreiro</option>
+                    <option value="Linda Flor">Linda Flor</option>
+                    <option value="Morada Nova">Morada Nova</option>
+                    <option value="Nova Esperança">Nova Esperança</option>
+                    <option value="Panon II">Panon II</option>
+                    <option value="Parati">Parati</option>
+                    <option value="Riacho">Riacho</option>
+                    <option value="São João">São João</option>
+                    <option value="Vertentes I">Vertentes I</option>
+                    <option value="Vertentes II">Vertentes II</option>
+                    <option value="Outras">Outras Cidades / Outras</option>
+                </select>
+            </div>
+
+            <!-- OPÇÕES ENXUTAS APENAS PARA CURATIVO ESPECIAL -->
+            <div class="form-group">
+                <label class="form-label">Procedimentos</label>
+                <div class="check-group">
+                    <label class="check-item"><input type="checkbox" id="check-curativo" value="Sim">Curativo especial</label>
+                </div>
+            </div>
+
+            <div class="modal-acoes">
+                <button class="btn-cancelar" onclick="fecharModalConclusao()">Cancelar</button>
+                <button class="btn-confirmar" onclick="confirmarEEnviarAtendimento()">Salvar e Concluir</button>
+            </div>
+        </div>
+    </div>
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        const MEU_SETOR = 'AUTORIZACAO';
+        const MEU_SETOR = 'AUTORIZACAO'; // Alterado para o nome do setor
 
         let operadorLogado = localStorage.getItem('operadorAtual');
         if (!operadorLogado) {
@@ -191,12 +278,14 @@
         function inicializarGuiche() {
             const sel = document.getElementById('input-guiche');
             
+            // Você pode adicionar os nomes das meninas da Autorização aqui depois
             const mapaGuiches = {
-                'williane': '1',
-                'jessica': '2',
-                'joelson': '4',
-                'evelyn': '5',
-                'vinny': '6'
+                'Williane': '1',
+                'Jessica': '2',
+                'joelson': '3',
+                'Diana': '4',
+                'Evelyn': '5',
+                'Vinny': '6'
             };
             
             let nomeLimpo = operadorLogado.toLowerCase().trim();
@@ -219,6 +308,7 @@
 
         socket.on('connect', () => {
             socket.emit('pedir_minha_producao', operadorLogado);
+            socket.emit('estou_online', operadorLogado);
         });
 
         socket.on('receber_minha_producao', (quantidade) => {
@@ -320,7 +410,8 @@
             if (pacienteEmAtendimento) atualizarTempoEspera();
         }, 60000);
 
-        socket.on('atualizar_fila', (filaGlobal) => {
+       socket.on('atualizar_fila', (filaGlobal) => {
+            // Filtrando apenas fichas da Autorização (AT)
             const filaFiltrada = filaGlobal.filter(function(p) { return p.fila === 'AT' && p.status === 'LOBBY'; });
             const previewContainer = document.getElementById('lista-preview');
             previewContainer.innerHTML = '';
@@ -333,15 +424,13 @@
                 previewContainer.innerHTML = '<div style="text-align:center; padding: 30px; color: #9ca3af; font-weight: 600;">Nenhum paciente aguardando autorização.</div>';
             } else {
                 filaFiltrada.forEach(function(p) {
-                    const classeBorda = 'prev-r';
                     const tempo = formatarEsperaEmMinutos(p.horarioEmissao || p.horarioEmissao);
-                    
-                    // Tudo em uma linha só para o VS Code não quebrar!
-                    const htmlSeguro = "<div class='item-preview " + classeBorda + "'><span class='prev-senha'>" + p.ficha + "</span><div style='font-size:12px;color:#6b7280;margin-top:6px;'>Espera: " + tempo + "</div></div>";
+                    const htmlSeguro = "<div class='item-preview'><span class='prev-senha'>" + p.ficha + "</span><div style='font-size:12px;color:#6b7280;margin-top:6px;'>Espera: " + tempo + "</div></div>";
                     previewContainer.innerHTML += htmlSeguro;
                 });
             }
         });
+
         function chamarProximoSmart() {
             if (pacienteEmAtendimento || tvOcupadaGlobal) return;
             const guiche = localStorage.getItem(STORAGE_GUICHE) || document.getElementById('input-guiche').value || '1';
@@ -390,7 +479,6 @@
                     rechamadasUsadas = 2;
                     iniciarCooldown();
                 } else if (rechamadasUsadas === 2) {
-                    // A MÁGICA DA 3ª CHAMADA (O guichê vira nulo, a TV chama direto pra Sala)
                     pacoteRechamada.guiche = null;
                     socket.emit('rechamar_paciente_tv', pacoteRechamada);
                     rechamadasUsadas = 3;
@@ -420,14 +508,49 @@
             }, 1000);
         }
 
-        function finalizarAtendimento(status) {
+        // ==========================================
+        // LÓGICA DA JANELA FLUTUANTE (MODAL DE UBS)
+        // ==========================================
+        function abrirModalConclusao() {
+            document.getElementById('modal-conclusao').style.display = 'flex';
+        }
+
+        function fecharModalConclusao() {
+            document.getElementById('modal-conclusao').style.display = 'none';
+            document.getElementById('select-ubs').value = '';
+            // Reset do checkbox de curativo
+            document.getElementById('check-curativo').checked = false;
+        }
+
+        function confirmarEEnviarAtendimento() {
+            const ubsSelecionada = document.getElementById('select-ubs').value;
+            
+            if (!ubsSelecionada) {
+                alert('⚠️ Por favor, selecione a Origem do Paciente (Unidade de Saúde).');
+                return;
+            }
+
+            // Verifica se o checkbox foi marcado
+            const entregouCurativo = document.getElementById('check-curativo').checked ? 'Sim' : 'Não';
+
+            const dadosDoFormulario = {
+                ubs: ubsSelecionada,
+                curativoEspecial: entregouCurativo
+            };
+
+            fecharModalConclusao();
+            finalizarAtendimento('atendido', dadosDoFormulario);
+        }
+
+        function finalizarAtendimento(status, dadosExtras = {}) {
             if (pacienteEmAtendimento) {
                 socket.emit('registrar_conclusao_atendimento', {
                     setor: MEU_SETOR,
                     resultado: status,
                     siglaFicha: pacienteEmAtendimento.fila,
                     idFicha: pacienteEmAtendimento.id,
-                    operador: operadorLogado
+                    operador: operadorLogado,
+                    ...dadosExtras
                 });
 
                 setTimeout(() => {
